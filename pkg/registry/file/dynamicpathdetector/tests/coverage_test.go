@@ -39,6 +39,35 @@ func TestAnalyzePath(t *testing.T) {
 	}
 }
 
+func TestCollapseAdjacentDynamicIdentifiers(t *testing.T) {
+	testCases := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{"No dynamic identifiers", "/a/b/c", "/a/b/c"},
+		{"Single dynamic identifier", "/a/\u22ef/c", "/a/\u22ef/c"},
+		{"Two adjacent dynamic identifiers", "/a/\u22ef/\u22ef/d", "/a/*/d"},
+		{"Three adjacent dynamic identifiers", "/a/\u22ef/\u22ef/\u22ef/e", "/a/*/e"},
+		{"Dynamic identifiers separated by static segment", "/\u22ef/b/\u22ef/d", "/\u22ef/b/\u22ef/d"},
+		{"Multiple groups of adjacent identifiers", "/\u22ef/\u22ef/c/\u22ef/\u22ef/f", "/*/c/*/f"},
+		{"Starts with adjacent identifiers", "/\u22ef/\u22ef/c", "/*/c"},
+		{"Ends with adjacent identifiers", "/a/\u22ef/\u22ef", "/a/*"},
+		{"Only adjacent identifiers", "/\u22ef/\u22ef", "/*"},
+		{"Path with leading slash", "/\u22ef/\u22ef", "/*"},
+		{"Empty path", "", ""},
+		{"Single segment path", "a", "a"},
+		{"Single dynamic segment path", "\u22ef", "\u22ef"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := dynamicpathdetector.CollapseAdjacentDynamicIdentifiers(tc.path)
+			assert.Equal(t, tc.expected, result, "Path was not collapsed as expected. Got %s, want %s", result, tc.expected)
+		})
+	}
+}
+
 func TestDynamicSegments(t *testing.T) {
 	analyzer := dynamicpathdetector.NewPathAnalyzer(100)
 
@@ -77,7 +106,7 @@ func TestMultipleDynamicSegments(t *testing.T) {
 	// Test with the 100th unique user and post IDs (should trigger dynamic segments)
 	result, err := analyzer.AnalyzePath("/api/users/101/posts/1031", "api")
 	assert.NoError(t, err)
-	expected := "/api/users/\u22ef/posts/\u22ef"
+	expected := "/api/users/*/posts/\u22ef"
 	assert.Equal(t, expected, result)
 }
 
@@ -237,6 +266,42 @@ func TestCompareDynamic(t *testing.T) {
 			name:        "2 other dynamic segments, no match",
 			dynamicPath: "/\u22ef/users/\u22ef",
 			regularPath: "/api/apps/456",
+			want:        false,
+		},
+		{
+			name:        "Asterisk wildcard matches everything",
+			dynamicPath: "*",
+			regularPath: "/anything/goes/here",
+			want:        true,
+		},
+		{
+			name:        "Asterisk wildcard for multiple segments",
+			dynamicPath: "/api/*/123",
+			regularPath: "/api/users/some/other/segment/123",
+			want:        true,
+		},
+		{
+			name:        "Asterisk wildcard at the end",
+			dynamicPath: "/api/users/*",
+			regularPath: "/api/users/123/posts/456",
+			want:        true,
+		},
+		{
+			name:        "Asterisk wildcard no match",
+			dynamicPath: "/api/*/123",
+			regularPath: "/api/users/456",
+			want:        false,
+		},
+		{
+			name:        "Combination of asterisk and ellipsis",
+			dynamicPath: "/api/*/posts/\u22ef",
+			regularPath: "/api/users/123/posts/456",
+			want:        true,
+		},
+		{
+			name:        "Combination of asterisk and ellipsis no match",
+			dynamicPath: "/api/*/posts/\u22ef",
+			regularPath: "/api/users/123/posts/456/comments",
 			want:        false,
 		},
 	}

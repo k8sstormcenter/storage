@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// This function builds a tree of nodes
+
 func NewPathAnalyzer(threshold int) *PathAnalyzer {
 	return &PathAnalyzer{
 		RootNodes: make(map[string]*SegmentNode),
@@ -23,7 +25,8 @@ func (ua *PathAnalyzer) AnalyzePath(p, identifier string) (string, error) {
 		}
 		ua.RootNodes[identifier] = node
 	}
-	return ua.processSegments(node, p), nil
+	processedPath := ua.processSegments(node, p)
+	return CollapseAdjacentDynamicIdentifiers(processedPath), nil
 }
 
 func (ua *PathAnalyzer) processSegments(node *SegmentNode, p string) string {
@@ -49,18 +52,22 @@ func (ua *PathAnalyzer) processSegments(node *SegmentNode, p string) string {
 }
 
 func (ua *PathAnalyzer) processSegment(node *SegmentNode, segment string) *SegmentNode {
-	if segment == DynamicIdentifier {
+	switch segment {
+	case DynamicIdentifier:
 		return ua.handleDynamicSegment(node)
-	} else if node.IsNextDynamic() {
-		if len(node.Children) > 1 {
-			temp := node.Children[DynamicIdentifier]
-			node.Children = map[string]*SegmentNode{}
-			node.Children[DynamicIdentifier] = temp
+	case "*":
+		return ua.handleWildcardSegment(node)
+	default:
+		if node.IsNextDynamic() {
+			if len(node.Children) > 1 {
+				temp := node.Children[DynamicIdentifier]
+				node.Children = map[string]*SegmentNode{}
+				node.Children[DynamicIdentifier] = temp
+			}
+			return node.Children[DynamicIdentifier]
+		} else if child, exists := node.Children[segment]; exists {
+			return child
 		}
-		return node.Children[DynamicIdentifier]
-	} else if child, exists := node.Children[segment]; exists {
-		return child
-	} else {
 		return ua.handleNewSegment(node, segment)
 	}
 }
@@ -104,8 +111,39 @@ func (ua *PathAnalyzer) createDynamicNode(node *SegmentNode) *SegmentNode {
 	return dynamicNode
 }
 
+func (ua *PathAnalyzer) handleWildcardSegment(node *SegmentNode) *SegmentNode {
+	if wildcardChild, exists := node.Children["*"]; exists {
+		return wildcardChild
+	} else {
+		return ua.createWildcardNode(node)
+	}
+}
+
+func (ua *PathAnalyzer) createWildcardNode(node *SegmentNode) *SegmentNode {
+	wildcardNode := &SegmentNode{
+		SegmentName: "*",
+		Count:       0, // for wildcards its not relevant how many counts it has, it collapes neighbors
+		Children:    make(map[string]*SegmentNode),
+	}
+
+	child := node.Children[DynamicIdentifier] //@constanze : not sure if this pointer exist, lets test
+
+	// copy all existing GRANDchildren to the wildcard node
+	for _, grandchild := range child.Children {
+		shallowChildrenCopy(grandchild, wildcardNode)
+	}
+
+	// Replace all children with the new wildcard node
+	node.Children = map[string]*SegmentNode{
+		"*": wildcardNode,
+	}
+
+	return wildcardNode
+}
+
 func (ua *PathAnalyzer) updateNodeStats(node *SegmentNode) {
-	if node.Count > ua.threshold && !node.IsNextDynamic() {
+	switch {
+	case node.Count > ua.threshold && !node.IsNextDynamic():
 		dynamicChild := &SegmentNode{
 			SegmentName: DynamicIdentifier,
 			Count:       0,
@@ -120,6 +158,10 @@ func (ua *PathAnalyzer) updateNodeStats(node *SegmentNode) {
 		node.Children = map[string]*SegmentNode{
 			DynamicIdentifier: dynamicChild,
 		}
+
+	case node.IsNextDynamic() && node.Children[DynamicIdentifier].IsNextDynamic():
+		// Second-level collapse: adjacent dynamic identifiers (⋯/⋯) -> wildcard (*)
+		ua.createWildcardNode(node)
 	}
 }
 
@@ -134,33 +176,79 @@ func shallowChildrenCopy(src, dst *SegmentNode) {
 	}
 }
 
+// so in this masterful logic: we have 3 types of nodes:  the regular ,the ellipsis and the wildcard
+// if the path analyser is above the threshold it creates the ellipsis
+// if two ellipsis are adjacent it creates the asterix (and currently messes up the node tree)
+func CollapseAdjacentDynamicIdentifiers(p string) string {
+	segments := strings.Split(p, "/")
+	var result []string
+	inDynamicSequence := false
+
+	for i := 0; i < len(segments); i++ {
+		isDynamic := segments[i] == DynamicIdentifier
+
+		if isDynamic && !inDynamicSequence {
+			// Check if this starts a sequence of at least two dynamic identifiers ## TODO: @constanze check if we ever have two asterix adjacent
+			isSequence := false
+			for j := i + 1; j < len(segments); j++ {
+				if segments[j] == DynamicIdentifier {
+					isSequence = true
+					break
+				}
+			}
+
+			if isSequence {
+				inDynamicSequence = true
+				result = append(result, "*")
+			} else {
+				result = append(result, segments[i])
+			}
+		} else if isDynamic && inDynamicSequence {
+			// Continue sequence, do nothing as '*' is already added
+			continue
+		} else {
+			inDynamicSequence = false
+			result = append(result, segments[i])
+		}
+	}
+	return strings.Join(result, "/")
+}
+
 func CompareDynamic(dynamicPath, regularPath string) bool {
-	dynamicIndex, regularIndex := 0, 0
-	dynamicLen, regularLen := len(dynamicPath), len(regularPath)
+	dynamicSegments := strings.Split(dynamicPath, "/")
+	regularSegments := strings.Split(regularPath, "/")
 
-	for dynamicIndex < dynamicLen && regularIndex < regularLen {
-		// Find the next segment in dynamicPath
-		dynamicSegmentStart := dynamicIndex
-		for dynamicIndex < dynamicLen && dynamicPath[dynamicIndex] != '/' {
-			dynamicIndex++
-		}
-		dynamicSegment := dynamicPath[dynamicSegmentStart:dynamicIndex]
+	return compareSegments(dynamicSegments, regularSegments)
+}
 
-		// Find the next segment in regularPath
-		regularSegmentStart := regularIndex
-		for regularIndex < regularLen && regularPath[regularIndex] != '/' {
-			regularIndex++
-		}
-		regularSegment := regularPath[regularSegmentStart:regularIndex]
-
-		if dynamicSegment != DynamicIdentifier && dynamicSegment != regularSegment {
-			return false
-		}
-
-		// Move to the next segment
-		dynamicIndex++
-		regularIndex++
+func compareSegments(dynamic, regular []string) bool {
+	if len(dynamic) == 0 {
+		return len(regular) == 0
 	}
 
-	return dynamicIndex > dynamicLen && regularIndex > regularLen
+	if dynamic[0] == "*" {
+		if len(dynamic) == 1 {
+			return true
+		}
+		nextDynamic := dynamic[1]
+		for i := range regular {
+
+			match := nextDynamic == DynamicIdentifier || (i < len(regular) && regular[i] == nextDynamic)
+
+			if match && compareSegments(dynamic[1:], regular[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if len(regular) == 0 {
+		return false
+	}
+
+	if dynamic[0] == DynamicIdentifier || dynamic[0] == regular[0] {
+		return compareSegments(dynamic[1:], regular[1:])
+	}
+
+	return false
 }
