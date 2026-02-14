@@ -30,6 +30,7 @@ var DefaultCollapseConfigs = []CollapseConfig{
 
 const OpenDynamicThreshold = 50
 const EndpointDynamicThreshold = 100
+const ExecArgDynamicThreshold = 10
 
 var DefaultCollapseConfig = CollapseConfig{
 	Prefix:    "/",
