@@ -112,13 +112,14 @@ func deflateApplicationProfileContainer(container softwarecomposition.Applicatio
 		logger.L().Debug("falling back to DeflateStringer for opens", loggerhelpers.Error(err))
 		opens = DeflateStringer(container.Opens)
 	}
+	execs := dynamicpathdetector.AnalyzeExecs(container.Execs, dynamicpathdetector.ExecArgDynamicThreshold)
 	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzer(dynamicpathdetector.EndpointDynamicThreshold))
 	identifiedCallStacks := callstack.UnifyIdentifiedCallStacks(container.IdentifiedCallStacks)
 
 	return softwarecomposition.ApplicationProfileContainer{
 		Name:                 container.Name,
 		Capabilities:         DeflateSortString(container.Capabilities),
-		Execs:                DeflateStringer(container.Execs),
+		Execs:                execs,
 		Opens:                opens,
 		Syscalls:             DeflateSortString(container.Syscalls),
 		SeccompProfile:       container.SeccompProfile,

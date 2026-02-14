@@ -118,8 +118,8 @@ func TestApplicationProfileProcessor_PreSave(t *testing.T) {
 						{
 							Name: "container1",
 							Execs: []softwarecomposition.ExecCalls{
-								{Path: "/usr/bin/ls", Args: []string{"-l", "/tmp"}},
 								{Path: "/usr/bin/ls", Args: []string{"-l", "/home"}},
+								{Path: "/usr/bin/ls", Args: []string{"-l", "/tmp"}},
 							},
 						},
 						{
