@@ -76,7 +76,7 @@ func TestCollapseExecArgsApacheStartup(t *testing.T) {
 		{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/run/apache2"}},
 	}
 
-	result := dynamicpathdetector.CollapseExecArgs(deduped, 3)
+	result := dynamicpathdetector.CollapseExecArgs(deduped, 2)
 
 	// 7 entries → 3 after collapsing:
 	//   /bin/mkdir       [/bin/mkdir, -p, ⋯]
