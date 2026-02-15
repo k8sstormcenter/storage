@@ -5,25 +5,47 @@ import (
 	"slices"
 	"strings"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	types "github.com/kubescape/storage/pkg/apis/softwarecomposition"
 )
 
-// AnalyzeExecs collapses exec argument vectors using a trie-based approach.
-// Argument positions with more than threshold unique values are replaced with DynamicIdentifier (⋯).
-// Results are deduplicated by their collapsed string representation and sorted.
-func AnalyzeExecs(execs []types.ExecCalls, threshold int) []types.ExecCalls {
+// DeduplicateExecs removes exact-duplicate ExecCalls based on their
+// string representation (Path + Args + Envs + ParentPath).
+func DeduplicateExecs(execs []types.ExecCalls) []types.ExecCalls {
+	if execs == nil {
+		return nil
+	}
+	out := make([]types.ExecCalls, 0, len(execs))
+	seen := mapset.NewThreadUnsafeSet[string]()
+	for _, e := range execs {
+		key := e.String()
+		if seen.Contains(key) {
+			continue
+		}
+		seen.Add(key)
+		out = append(out, e)
+	}
+	return out
+}
+
+// CollapseExecArgs collapses argument positions that show high variability
+// across execs sharing the same binary Path. Positions with more than
+// threshold unique values are replaced with DynamicIdentifier (⋯).
+// Since collapsing can turn previously-distinct entries into duplicates,
+// a second dedup pass is applied to the result.
+func CollapseExecArgs(execs []types.ExecCalls, threshold int) []types.ExecCalls {
 	if execs == nil {
 		return nil
 	}
 
 	analyzer := NewArgAnalyzer(threshold)
 
-	// First pass: build trie from all arg vectors, grouped by exec Path
+	// Build trie from all arg vectors, grouped by exec Path
 	for _, exec := range execs {
 		analyzer.AddArgs(exec.Args, exec.Path)
 	}
 
-	// Second pass: read collapsed arg vectors, dedup by collapsed string
+	// Apply collapsing and dedup the result
 	dedupMap := make(map[string]types.ExecCalls)
 	for _, exec := range execs {
 		collapsed := analyzer.AnalyzeArgs(exec.Args, exec.Path)

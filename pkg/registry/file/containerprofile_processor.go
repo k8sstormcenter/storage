@@ -706,7 +706,7 @@ func DeflateContainerProfileSpec(container softwarecomposition.ContainerProfileS
 		logger.L().Debug("ContainerProfileProcessor.deflateContainerProfileSpec - falling back to DeflateStringer for opens", loggerhelpers.Error(err))
 		opens = DeflateStringer(container.Opens)
 	}
-	execs := dynamicpathdetector.AnalyzeExecs(container.Execs, dynamicpathdetector.ExecArgDynamicThreshold)
+	execs := dynamicpathdetector.CollapseExecArgs(dynamicpathdetector.DeduplicateExecs(container.Execs), dynamicpathdetector.ExecArgDynamicThreshold)
 	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzer(dynamicpathdetector.EndpointDynamicThreshold))
 	identifiedCallStacks := callstack.UnifyIdentifiedCallStacks(container.IdentifiedCallStacks)
 
