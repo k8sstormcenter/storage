@@ -257,6 +257,168 @@ func TestDeflateRulePolicies(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Exec dedup + collapse through the actual deflateApplicationProfileContainer
+// ---------------------------------------------------------------------------
+
+// TestDeflateApplicationProfileContainer_ExecDedup verifies that exact-duplicate
+// execs are removed by the deflate pipeline.
+func TestDeflateApplicationProfileContainer_ExecDedup(t *testing.T) {
+	container := softwarecomposition.ApplicationProfileContainer{
+		Name: "test",
+		Execs: []softwarecomposition.ExecCalls{
+			{Path: "/usr/bin/ls", Args: []string{"-l", "/tmp"}},
+			{Path: "/usr/bin/ls", Args: []string{"-l", "/tmp"}}, // exact dup
+			{Path: "/usr/bin/ls", Args: []string{"-l", "/tmp"}}, // exact dup
+			{Path: "/usr/bin/ls", Args: []string{"-l", "/home"}},
+		},
+	}
+
+	result := deflateApplicationProfileContainer(container, nil)
+
+	assert.Len(t, result.Execs, 2, "exact duplicates should be removed, got %v", result.Execs)
+}
+
+// TestDeflateApplicationProfileContainer_ExecCollapseApache uses the exact exec
+// data from a real Apache container ApplicationProfile. The pipeline must:
+//  1. Deduplicate exact duplicates
+//  2. Collapse varying arg positions to ⋯
+func TestDeflateApplicationProfileContainer_ExecCollapseApache(t *testing.T) {
+	container := softwarecomposition.ApplicationProfileContainer{
+		Name: "apache",
+		Execs: []softwarecomposition.ExecCalls{
+			// mkdir called with 3 different dirs (+ duplicates of each)
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/lock/apache2"}},
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/lock/apache2"}},
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/log/apache2"}},
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/log/apache2"}},
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/run/apache2"}},
+			{Path: "/bin/mkdir", Args: []string{"/bin/mkdir", "-p", "/var/run/apache2"}},
+			// rm called once
+			{Path: "/bin/rm", Args: []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"}},
+			{Path: "/bin/rm", Args: []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"}},
+			// dirname called with 3 different dirs (+ duplicates)
+			{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/lock/apache2"}},
+			{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/lock/apache2"}},
+			{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/log/apache2"}},
+			{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/log/apache2"}},
+			{Path: "/usr/bin/dirname", Args: []string{"/usr/bin/dirname", "/var/run/apache2"}},
+		},
+	}
+
+	result := deflateApplicationProfileContainer(container, nil)
+
+	// After dedup: 7 unique. After collapse (threshold=10, 3 variants per binary):
+	// With threshold=10 and only 3 variants, collapsing does NOT kick in.
+	// This test documents the current behavior at ExecArgDynamicThreshold.
+	t.Logf("ExecArgDynamicThreshold=%d", dynamicpathdetector.ExecArgDynamicThreshold)
+	t.Logf("result execs (%d):", len(result.Execs))
+	for _, e := range result.Execs {
+		t.Logf("  path=%s args=%v", e.Path, e.Args)
+	}
+
+	// Duplicates must always be removed regardless of threshold
+	assert.Less(t, len(result.Execs), len(container.Execs),
+		"duplicates were not removed")
+
+	// After dedup we expect 7 unique entries
+	// (3 mkdir + 1 rm + 3 dirname)
+	// Whether they further collapse depends on the threshold
+	if dynamicpathdetector.ExecArgDynamicThreshold < 3 {
+		// Collapsing kicks in: 3 variants > threshold
+		assert.Len(t, result.Execs, 3,
+			"with threshold < 3, mkdir/dirname variants should collapse")
+
+		for _, e := range result.Execs {
+			if e.Path == "/bin/mkdir" {
+				assert.Equal(t, []string{"/bin/mkdir", "-p", dynamicpathdetector.DynamicIdentifier}, e.Args)
+			}
+			if e.Path == "/usr/bin/dirname" {
+				assert.Equal(t, []string{"/usr/bin/dirname", dynamicpathdetector.DynamicIdentifier}, e.Args)
+			}
+			if e.Path == "/bin/rm" {
+				assert.Equal(t, []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"}, e.Args)
+			}
+		}
+	} else {
+		// Threshold too high for 3 variants — only dedup, no collapse
+		assert.Len(t, result.Execs, 7,
+			"with threshold >= 3, 3 variants should not collapse (only dedup)")
+	}
+}
+
+// TestDeflateApplicationProfileContainer_ExecCollapseHighVariability generates
+// enough exec variants to exceed ExecArgDynamicThreshold and verifies collapsing.
+func TestDeflateApplicationProfileContainer_ExecCollapseHighVariability(t *testing.T) {
+	n := dynamicpathdetector.ExecArgDynamicThreshold + 1
+	var execs []softwarecomposition.ExecCalls
+	for i := 0; i < n; i++ {
+		execs = append(execs, softwarecomposition.ExecCalls{
+			Path: "/usr/bin/curl",
+			Args: []string{"-s", fmt.Sprintf("http://service%d/api", i)},
+		})
+	}
+	// Add duplicates
+	execs = append(execs, execs[0], execs[1], execs[2])
+
+	container := softwarecomposition.ApplicationProfileContainer{
+		Name:  "curl-heavy",
+		Execs: execs,
+	}
+
+	result := deflateApplicationProfileContainer(container, nil)
+
+	// All entries share path=/usr/bin/curl, static arg "-s", varying URL
+	assert.Len(t, result.Execs, 1,
+		"all curl variants should collapse to one entry, got %v", result.Execs)
+	assert.Equal(t, "/usr/bin/curl", result.Execs[0].Path)
+	assert.Equal(t, []string{"-s", dynamicpathdetector.DynamicIdentifier}, result.Execs[0].Args,
+		"static -s preserved, dynamic URL collapsed")
+}
+
+// TestDeflateApplicationProfileContainer_PreSaveExecEndToEnd runs the full
+// PreSave path with exec data to verify dedup+collapse in the real pipeline.
+func TestDeflateApplicationProfileContainer_PreSaveExecEndToEnd(t *testing.T) {
+	n := dynamicpathdetector.ExecArgDynamicThreshold + 1
+	var execs []softwarecomposition.ExecCalls
+	for i := 0; i < n; i++ {
+		// Each exec appears twice (exact dup)
+		exec := softwarecomposition.ExecCalls{
+			Path: "/usr/bin/wget",
+			Args: []string{"/usr/bin/wget", "-q", fmt.Sprintf("http://backend%d:8080/health", i)},
+		}
+		execs = append(execs, exec, exec)
+	}
+
+	profile := &softwarecomposition.ApplicationProfile{
+		ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
+		Spec: softwarecomposition.ApplicationProfileSpec{
+			Containers: []softwarecomposition.ApplicationProfileContainer{
+				{Name: "sidecar", Execs: execs},
+			},
+		},
+	}
+
+	processor := NewApplicationProfileProcessor(config.Config{
+		DefaultNamespace:          "kubescape",
+		MaxApplicationProfileSize: 100000,
+	})
+
+	err := processor.PreSave(context.TODO(), profile)
+	assert.NoError(t, err)
+
+	resultExecs := profile.Spec.Containers[0].Execs
+	t.Logf("input: %d execs, output: %d execs", len(execs), len(resultExecs))
+	for _, e := range resultExecs {
+		t.Logf("  path=%s args=%v", e.Path, e.Args)
+	}
+
+	assert.Len(t, resultExecs, 1,
+		"all wget variants should dedup+collapse to 1 entry")
+	assert.Equal(t, "/usr/bin/wget", resultExecs[0].Path)
+	assert.Equal(t, []string{"/usr/bin/wget", "-q", dynamicpathdetector.DynamicIdentifier}, resultExecs[0].Args)
+}
+
 // generateSOOpens creates N unique .so OpenCalls under /usr/lib/x86_64-linux-gnu/
 func generateSOOpens(n int) []softwarecomposition.OpenCalls {
 	opens := make([]softwarecomposition.OpenCalls, n)
