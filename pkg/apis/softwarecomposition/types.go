@@ -250,9 +250,10 @@ type RulePolicy struct {
 }
 
 type ExecCalls struct {
-	Path string
-	Args []string
-	Envs []string
+	Path       string
+	Args       []string
+	Envs       []string
+	ParentPath string
 }
 
 const sep = "␟"
@@ -268,6 +269,10 @@ func (e ExecCalls) String() string {
 	for _, env := range e.Envs {
 		s.WriteString(sep)
 		s.WriteString(env)
+	}
+	if e.ParentPath != "" {
+		s.WriteString(sep)
+		s.WriteString(e.ParentPath)
 	}
 	return s.String()
 }

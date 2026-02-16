@@ -226,9 +226,10 @@ type ApplicationProfileContainer struct {
 }
 
 type ExecCalls struct {
-	Path string   `json:"path,omitempty" protobuf:"bytes,1,opt,name=path"`
-	Args []string `json:"args,omitempty" protobuf:"bytes,2,opt,name=args"`
-	Envs []string `json:"envs,omitempty" protobuf:"bytes,3,opt,name=envs"`
+	Path       string   `json:"path,omitempty" protobuf:"bytes,1,opt,name=path"`
+	Args       []string `json:"args,omitempty" protobuf:"bytes,2,opt,name=args"`
+	Envs       []string `json:"envs,omitempty" protobuf:"bytes,3,opt,name=envs"`
+	ParentPath string   `json:"parentPath,omitempty" protobuf:"bytes,4,opt,name=parentPath"`
 }
 
 type OpenCalls struct {
