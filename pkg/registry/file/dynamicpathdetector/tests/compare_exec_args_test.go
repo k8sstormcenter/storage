@@ -134,6 +134,85 @@ func TestCompareExecArgs(t *testing.T) {
 			runtimeArgs: []string{"/usr/bin/curl", "-s", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"},
 			expected:    true,
 		},
+		// --- Exec-specific scenarios (strict, dynamic, wildcard boundary cases) ---
+		{
+			name:        "Strict mkdir -p with exact dir",
+			profileArgs: []string{"/bin/mkdir", "-p", "/var/lock/apache2"},
+			runtimeArgs: []string{"/bin/mkdir", "-p", "/var/lock/apache2"},
+			expected:    true,
+		},
+		{
+			name:        "Strict mkdir -p with different dir",
+			profileArgs: []string{"/bin/mkdir", "-p", "/var/lock/apache2"},
+			runtimeArgs: []string{"/bin/mkdir", "-p", "/var/log/apache2"},
+			expected:    false,
+		},
+		{
+			name:        "Strict rm -f exact path",
+			profileArgs: []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"},
+			runtimeArgs: []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"},
+			expected:    true,
+		},
+		{
+			name:        "Strict rm different flags and path",
+			profileArgs: []string{"/bin/rm", "-f", "/var/run/apache2/apache2.pid"},
+			runtimeArgs: []string{"/bin/rm", "-rf", "/tmp"},
+			expected:    false,
+		},
+		{
+			name:        "Dynamic mkdir -p matches any dir",
+			profileArgs: []string{"/bin/mkdir", "-p", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/bin/mkdir", "-p", "/var/log"},
+			expected:    true,
+		},
+		{
+			name:        "Dynamic mkdir missing -p flag",
+			profileArgs: []string{"/bin/mkdir", "-p", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/bin/mkdir", "/var/log"},
+			expected:    false,
+		},
+		{
+			name:        "Dynamic mkdir -p extra arg beyond dynamic",
+			profileArgs: []string{"/bin/mkdir", "-p", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/bin/mkdir", "-p", "-v", "/var/log"},
+			expected:    false,
+		},
+		{
+			name:        "Dynamic requires at least one arg",
+			profileArgs: []string{"/bin/mkdir", "-p", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/bin/mkdir", "-p"},
+			expected:    false,
+		},
+		{
+			name:        "Dynamic dirname matches any path",
+			profileArgs: []string{"/usr/bin/dirname", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/usr/bin/dirname", "/var/log"},
+			expected:    true,
+		},
+		{
+			name:        "Dynamic dirname requires one arg",
+			profileArgs: []string{"/usr/bin/dirname", dynamicpathdetector.DynamicIdentifier},
+			runtimeArgs: []string{"/usr/bin/dirname"},
+			expected:    false,
+		},
+		{
+			name:        "Wildcard echo hello matches zero trailing",
+			profileArgs: []string{"/bin/echo", "hello", "*"},
+			runtimeArgs: []string{"/bin/echo", "hello"},
+			expected:    true,
+		},
+		{
+			name:        "Wildcard echo hello matches one trailing",
+			profileArgs: []string{"/bin/echo", "hello", "*"},
+			runtimeArgs: []string{"/bin/echo", "hello", "world"},
+			expected:    true,
+		},
+		{
+			name:        "Wildcard echo hello rejects wrong literal",
+			profileArgs: []string{"/bin/echo", "hello", "*"},
+			runtimeArgs: []string{"/bin/echo", "goodbye"},
+			expected:    false,
+		},
 	}
 
 	for _, tt := range tests {

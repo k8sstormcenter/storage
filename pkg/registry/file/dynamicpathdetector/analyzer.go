@@ -314,11 +314,38 @@ func CompareDynamic(dynamicPath, regularPath string) bool {
 	return compareSegments(dynamicSegments, regularSegments)
 }
 
-// CompareExecArgs checks whether profileArgs (which may contain DynamicIdentifier
-// or WildcardIdentifier) matches runtimeArgs (literal values only).
-// Same semantics as path matching: ⋯ = one arg, * = zero or more remaining.
+
 func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
-	return compareSegments(profileArgs, runtimeArgs)
+	return matchArgs(profileArgs, runtimeArgs, 0, 0)
+}
+
+
+func matchArgs(profile, runtime []string, pi, ri int) bool {
+	for pi < len(profile) {
+		if profile[pi] == WildcardIdentifier {
+			// Trailing * matches everything remaining (including nothing).
+			if pi == len(profile)-1 {
+				return true
+			}
+			// Non-trailing *: try matching the rest starting at every position.
+			for k := ri; k <= len(runtime); k++ {
+				if matchArgs(profile, runtime, pi+1, k) {
+					return true
+				}
+			}
+			return false
+		}
+		if ri >= len(runtime) {
+			return false
+		}
+		if profile[pi] == DynamicIdentifier || profile[pi] == runtime[ri] {
+			pi++
+			ri++
+			continue
+		}
+		return false
+	}
+	return ri == len(runtime)
 }
 
 func compareSegments(dynamic, regular []string) bool {
