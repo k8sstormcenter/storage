@@ -155,7 +155,7 @@ func TestApplicationProfileProcessor_PreSave(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewApplicationProfileProcessor(config.Config{DefaultNamespace: "kubescape", MaxApplicationProfileSize: tt.maxApplicationProfileSize})
+			a := NewApplicationProfileProcessor(config.Config{DefaultNamespace: "kubescape", MaxApplicationProfileSize: tt.maxApplicationProfileSize}, dynamicpathdetector.NewCollapseConfigProvider())
 			tt.wantErr(t, a.PreSave(context.TODO(), tt.object), fmt.Sprintf("PreSave(%v)", tt.object))
 			slices.Sort(tt.object.(*softwarecomposition.ApplicationProfile).Spec.Architectures)
 			assert.Equal(t, tt.want, tt.object)
@@ -279,7 +279,7 @@ func TestDeflateApplicationProfileContainer_CollapsesManyOpens(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	assert.Less(t, len(result.Opens), numOpens,
 		"%d .so files should be collapsed, got %d opens", numOpens, len(result.Opens))
@@ -314,7 +314,7 @@ func TestDeflateApplicationProfileContainer_CollapsesWithSbomSet(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, sbomSet)
+	result := deflateApplicationProfileContainer(container, sbomSet, dynamicpathdetector.DefaultCollapseSettings())
 
 	// Even though all paths are in SBOM, they should still be collapsed
 	assert.Less(t, len(result.Opens), numOpens,
@@ -352,7 +352,7 @@ func TestDeflateApplicationProfileContainer_MixedPathsCollapse(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	// Count paths by prefix
 	var usrLibPaths, etcPaths, tmpPaths int
@@ -384,7 +384,7 @@ func TestDeflateApplicationProfileContainer_NilSbomNoError(t *testing.T) {
 		},
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	// All 3 paths should remain (below any threshold)
 	assert.Equal(t, 3, len(result.Opens), "paths below threshold should not collapse")
@@ -418,7 +418,7 @@ func TestDeflateApplicationProfileContainer_PreSaveEndToEnd(t *testing.T) {
 	processor := NewApplicationProfileProcessor(config.Config{
 		DefaultNamespace:          "kubescape",
 		MaxApplicationProfileSize: 100000,
-	})
+	}, dynamicpathdetector.NewCollapseConfigProvider())
 
 	err := processor.PreSave(context.TODO(), profile)
 	assert.NoError(t, err)

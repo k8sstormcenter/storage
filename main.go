@@ -30,6 +30,7 @@ import (
 	"github.com/kubescape/storage/pkg/cmd/server"
 	"github.com/kubescape/storage/pkg/config"
 	"github.com/kubescape/storage/pkg/registry/file"
+	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -107,8 +108,12 @@ func main() {
 	cleanupHandler := file.NewResourcesCleanupHandler(osFs, file.DefaultStorageRoot, pool, watchDispatcher, cfg.CleanupInterval, cfg.DefaultNamespace, kubernetesAPI, relevancyEnabled)
 	go cleanupHandler.RunCleanupTask(ctx)
 
+	// start collapse config watcher
+	collapseConfigProvider := dynamicpathdetector.NewCollapseConfigProvider()
+	go dynamicpathdetector.WatchCollapseConfigMap(ctx, client, cfg.DefaultNamespace, "storage", collapseConfigProvider)
+
 	// start the server
-	options := server.NewWardleServerOptions(os.Stdout, os.Stderr, osFs, pool, cfg, watchDispatcher, cleanupHandler)
+	options := server.NewWardleServerOptions(os.Stdout, os.Stderr, osFs, pool, cfg, watchDispatcher, cleanupHandler, collapseConfigProvider)
 	cmd := server.NewCommandStartWardleServer(ctx, options, false)
 	logger.L().Info("APIServer starting")
 	code := cli.Run(cmd)

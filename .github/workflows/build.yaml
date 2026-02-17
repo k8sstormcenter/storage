@@ -21,6 +21,7 @@ on:
     push:
       branches:
         - feature/exec
+        - feature/tuning
 
 jobs:
   prepare:
