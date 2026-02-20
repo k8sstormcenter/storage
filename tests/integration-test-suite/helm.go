@@ -32,6 +32,48 @@ func flattenHelmGetValuesOutput(prefix string, m map[string]interface{}, result 
 	}
 }
 
+// EnsurePrometheusStack installs the kube-prometheus-stack (Prometheus + AlertManager)
+// into the monitoring namespace if not already present.
+func EnsurePrometheusStack() error {
+	// Check if prometheus is already installed
+	cmd := exec.Command("helm", "status", "prometheus", "-n", "monitoring")
+	if err := cmd.Run(); err == nil {
+		log.Printf("Prometheus stack already installed - skipping")
+		return nil
+	}
+
+	// Add prometheus-community repo
+	log.Printf("Adding prometheus-community helm repo...")
+	cmd = exec.Command("helm", "repo", "add", "prometheus-community", "https://prometheus-community.github.io/helm-charts")
+	_ = cmd.Run() // ignore error if already exists
+
+	// Update repos
+	log.Printf("Updating helm repos...")
+	cmd = exec.Command("helm", "repo", "update")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("helm repo update failed: %v\n%s", err, string(out))
+	}
+
+	// Install kube-prometheus-stack
+	log.Printf("Installing kube-prometheus-stack...")
+	args := []string{
+		"upgrade", "--install", "prometheus", "prometheus-community/kube-prometheus-stack",
+		"--namespace", "monitoring", "--create-namespace",
+		"--wait", "--timeout", "5m",
+		"--set", "grafana.enabled=false",
+		"--set", "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false",
+		"--set", "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false",
+	}
+	cmd = exec.Command("helm", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("prometheus stack install failed: %v\n%s", err, string(out))
+	}
+
+	log.Printf("Prometheus stack installed successfully")
+	return nil
+}
+
 func EnsureKubescapeHelmRelease(updateIfPresent bool, extraHelmSetArgs []string) error {
 	releaseName := "kubescape"
 	chartName := "kubescape/kubescape-operator"

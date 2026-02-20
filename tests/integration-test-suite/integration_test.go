@@ -59,6 +59,7 @@ func TestMain(m *testing.M) {
 	skipEnsureHelm := pflag.Bool("skip-ensure-helm", false, "Skip ensuring kubescape helm release is installed/upgraded")
 	updateIfPresent := pflag.Bool("update-helm-if-present", true, "If false, do not perform helm upgrade if a release already exists")
 	extraHelmSetArgs := pflag.String("extra-helm-set-args", "", "Comma-separated extra helm set args (e.g. foo=bar,bar=baz)")
+	ensurePrometheus := pflag.Bool("ensure-prometheus", false, "Install Prometheus stack (required for alert-based tests like TestWildcardExecArgsProfile)")
 	pflag.CommandLine.Parse(testBinaryArgs)
 
 	// Parse comma-separated extra helm set args
@@ -69,6 +70,13 @@ func TestMain(m *testing.M) {
 			if arg != "" {
 				extraArgs = append(extraArgs, arg)
 			}
+		}
+	}
+
+	// Install Prometheus stack before kubescape (AlertManager must exist for ServiceMonitors)
+	if *ensurePrometheus {
+		if err := EnsurePrometheusStack(); err != nil {
+			panic(err)
 		}
 	}
 
