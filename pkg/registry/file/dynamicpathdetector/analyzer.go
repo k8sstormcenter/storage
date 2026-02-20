@@ -339,3 +339,4 @@ func compareSegments(dynamic, regular []string) bool {
 	}
 	return false
 }
+
