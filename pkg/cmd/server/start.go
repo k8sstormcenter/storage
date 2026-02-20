@@ -35,6 +35,7 @@ import (
 	sampleopenapi "github.com/kubescape/storage/pkg/generated/openapi"
 	"github.com/kubescape/storage/pkg/queuemanager"
 	"github.com/kubescape/storage/pkg/registry/file"
+	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 	"github.com/kubescape/storage/pkg/statscollector"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -71,11 +72,12 @@ type WardleServerOptions struct {
 
 	AlternateDNS []string
 
-	CleanupHandler  *file.ResourcesCleanupHandler
-	OsFs            afero.Fs
-	Pool            *sqlitemigration.Pool
-	StorageConfig   config.Config
-	WatchDispatcher *file.WatchDispatcher
+	CleanupHandler         *file.ResourcesCleanupHandler
+	CollapseConfigProvider *dynamicpathdetector.CollapseConfigProvider
+	OsFs                   afero.Fs
+	Pool                   *sqlitemigration.Pool
+	StorageConfig          config.Config
+	WatchDispatcher        *file.WatchDispatcher
 }
 
 func WardleVersionToKubeVersion(ver *version.Version) *version.Version {
@@ -93,7 +95,7 @@ func WardleVersionToKubeVersion(ver *version.Version) *version.Version {
 }
 
 // NewWardleServerOptions returns a new WardleServerOptions
-func NewWardleServerOptions(out, errOut io.Writer, osFs afero.Fs, pool *sqlitemigration.Pool, cfg config.Config, watchDispatcher *file.WatchDispatcher, cleanupHandler *file.ResourcesCleanupHandler) *WardleServerOptions {
+func NewWardleServerOptions(out, errOut io.Writer, osFs afero.Fs, pool *sqlitemigration.Pool, cfg config.Config, watchDispatcher *file.WatchDispatcher, cleanupHandler *file.ResourcesCleanupHandler, collapseConfigProvider *dynamicpathdetector.CollapseConfigProvider) *WardleServerOptions {
 	o := &WardleServerOptions{
 		RecommendedOptions: genericoptions.NewRecommendedOptions(
 			defaultEtcdPathPrefix,
@@ -104,11 +106,12 @@ func NewWardleServerOptions(out, errOut io.Writer, osFs afero.Fs, pool *sqlitemi
 		StdOut: out,
 		StdErr: errOut,
 
-		CleanupHandler:  cleanupHandler,
-		OsFs:            osFs,
-		Pool:            pool,
-		StorageConfig:   cfg,
-		WatchDispatcher: watchDispatcher,
+		CleanupHandler:         cleanupHandler,
+		CollapseConfigProvider: collapseConfigProvider,
+		OsFs:                   osFs,
+		Pool:                   pool,
+		StorageConfig:          cfg,
+		WatchDispatcher:        watchDispatcher,
 	}
 	o.RecommendedOptions.Admission = nil
 	o.RecommendedOptions.Etcd = nil
@@ -274,11 +277,12 @@ func (o *WardleServerOptions) Config() (*apiserver.Config, error) {
 	c := &apiserver.Config{
 		GenericConfig: serverConfig,
 		ExtraConfig: apiserver.ExtraConfig{
-			CleanupHandler:  o.CleanupHandler,
-			OsFs:            o.OsFs,
-			Pool:            o.Pool,
-			StorageConfig:   o.StorageConfig,
-			WatchDispatcher: o.WatchDispatcher,
+			CleanupHandler:         o.CleanupHandler,
+			CollapseConfigProvider: o.CollapseConfigProvider,
+			OsFs:                   o.OsFs,
+			Pool:                   o.Pool,
+			StorageConfig:          o.StorageConfig,
+			WatchDispatcher:        o.WatchDispatcher,
 		},
 	}
 	return c, nil

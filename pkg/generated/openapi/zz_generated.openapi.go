@@ -1702,6 +1702,12 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ExecCalls(ref common.ReferenceC
 							},
 						},
 					},
+					"parentPath": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
