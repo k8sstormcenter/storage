@@ -23,6 +23,7 @@ on:
         - feature/exec
         - feature/tuning
         - kcna26/customgadget
+        - kcna26/teo
 
 jobs:
   prepare:
