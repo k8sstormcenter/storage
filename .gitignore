@@ -4,6 +4,7 @@ artifacts/simple-image/storage-apiserver
 artifacts/simple-image/kube-sample-apiserver
 logs-*/*
 tmp/*
+.claude
 
 # Integration test artifacts
 tests/integration-test-suite/junit-*.xml
