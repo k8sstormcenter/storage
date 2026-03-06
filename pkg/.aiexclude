@@ -1,0 +1,5 @@
+.ssh
+.pem
+.ssh/*
+.sh
+tmp*
