@@ -48,21 +48,8 @@ jobs:
             echo "cosign=false" >> "$GITHUB_OUTPUT"
           fi
 
-  tag-for-go-module:
-    needs: prepare
-    name: Create Git tag so Go modules can resolve this version
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create git tag matching IMAGE_TAG
-        run: |
-          git tag -f "go/${{ needs.prepare.outputs.image_tag }}"
-          git push origin "go/${{ needs.prepare.outputs.image_tag }}" --force
-
   publish-image:
-    needs: [prepare, tag-for-go-module]
+    needs: prepare
     permissions:
       id-token: write
       packages: write
@@ -86,8 +73,8 @@ jobs:
           GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
         run: |
           IMAGE_TAG="${{ needs.prepare.outputs.image_tag }}"
-          STORAGE_REF="go/${IMAGE_TAG}"
-          echo "Triggering node-agent build with IMAGE_TAG=${IMAGE_TAG} STORAGE_REF=${STORAGE_REF}"
+          STORAGE_REF="${GITHUB_SHA}"
+          echo "Triggering node-agent build with IMAGE_TAG=${IMAGE_TAG} STORAGE_REF=${STORAGE_REF} (commit)"
           gh workflow run build.yaml \
             --repo "${{ github.repository_owner }}/node-agent" \
             --ref "${{ github.ref_name }}" \
