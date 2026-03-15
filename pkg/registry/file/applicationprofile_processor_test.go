@@ -299,11 +299,12 @@ func TestDeflateApplicationProfileContainer_CollapsesManyOpens(t *testing.T) {
 	}
 }
 
-func TestDeflateApplicationProfileContainer_CollapsesWithSbomSet(t *testing.T) {
+func TestDeflateApplicationProfileContainer_SbomPathsPreserved(t *testing.T) {
 	numOpens := openThreshold() + 1
 	opens := generateSOOpens(numOpens)
 
-	// Build sbomSet containing ALL the .so paths (realistic scenario)
+	// Build sbomSet containing ALL the .so paths (realistic scenario:
+	// these are library files referenced by the SBOM for vulnerability scanning)
 	sbomSet := mapset.NewSet[string]()
 	for _, open := range opens {
 		sbomSet.Add(open.Path)
@@ -316,9 +317,19 @@ func TestDeflateApplicationProfileContainer_CollapsesWithSbomSet(t *testing.T) {
 
 	result := deflateApplicationProfileContainer(container, sbomSet)
 
-	// Even though all paths are in SBOM, they should still be collapsed
-	assert.Less(t, len(result.Opens), numOpens,
-		"SBOM paths should be collapsed too, got %d opens", len(result.Opens))
+	// SBOM paths must NEVER be collapsed — they map to specific library files
+	// used for vulnerability scanning. Collapsing them makes vuln results
+	// non-reproducible.
+	assert.Equal(t, numOpens, len(result.Opens),
+		"SBOM paths must be preserved verbatim, got %d opens (expected %d)", len(result.Opens), numOpens)
+	resultPaths := make(map[string]bool)
+	for _, r := range result.Opens {
+		resultPaths[r.Path] = true
+	}
+	for _, open := range opens {
+		assert.True(t, resultPaths[open.Path],
+			"SBOM path %q must be preserved in output", open.Path)
+	}
 }
 
 func TestDeflateApplicationProfileContainer_MixedPathsCollapse(t *testing.T) {
