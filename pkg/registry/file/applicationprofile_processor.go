@@ -51,6 +51,12 @@ func (a *ApplicationProfileProcessor) PreSave(ctx context.Context, object runtim
 	// size is the sum of all fields in all containers
 	var size int
 
+	// read collapse settings from CRD, fall back to defaults
+	settings := dynamicpathdetector.DefaultCollapseSettings()
+	if a.storageImpl != nil {
+		settings = a.storageImpl.GetCollapseSettings(ctx)
+	}
+
 	// Define a function to process a slice of containers
 	processContainers := func(containers []softwarecomposition.ApplicationProfileContainer) []softwarecomposition.ApplicationProfileContainer {
 		for i, container := range containers {
@@ -71,7 +77,7 @@ func (a *ApplicationProfileProcessor) PreSave(ctx context.Context, object runtim
 			} else {
 				logger.L().Debug("failed to get sbom name", loggerhelpers.Error(err), loggerhelpers.String("imageTag", container.ImageTag), loggerhelpers.String("imageID", container.ImageID))
 			}
-			containers[i] = deflateApplicationProfileContainer(container, sbomSet)
+			containers[i] = deflateApplicationProfileContainer(container, sbomSet, settings)
 			size += len(containers[i].Execs)
 			size += len(containers[i].Opens)
 			size += len(containers[i].Syscalls)
@@ -106,13 +112,13 @@ func (a *ApplicationProfileProcessor) SetStorage(containerProfileStorage Contain
 	a.storageImpl = containerProfileStorage
 }
 
-func deflateApplicationProfileContainer(container softwarecomposition.ApplicationProfileContainer, sbomSet mapset.Set[string]) softwarecomposition.ApplicationProfileContainer {
-	opens, err := dynamicpathdetector.AnalyzeOpens(container.Opens, dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs), sbomSet)
+func deflateApplicationProfileContainer(container softwarecomposition.ApplicationProfileContainer, sbomSet mapset.Set[string], settings dynamicpathdetector.CollapseSettings) softwarecomposition.ApplicationProfileContainer {
+	opens, err := dynamicpathdetector.AnalyzeOpens(container.Opens, dynamicpathdetector.NewPathAnalyzerWithConfigs(settings.OpenDynamicThreshold, settings.CollapseConfigs), sbomSet)
 	if err != nil {
 		logger.L().Debug("falling back to DeflateStringer for opens", loggerhelpers.Error(err))
 		opens = DeflateStringer(container.Opens)
 	}
-	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.EndpointDynamicThreshold, nil))
+	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzerWithConfigs(settings.EndpointDynamicThreshold, nil))
 	identifiedCallStacks := callstack.UnifyIdentifiedCallStacks(container.IdentifiedCallStacks)
 
 	return softwarecomposition.ApplicationProfileContainer{

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kubescape/k8s-interface/instanceidhandler/v1/helpers"
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
+	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -59,6 +60,9 @@ func (f *fakeStorage) GetContainerProfileMetadata(ctx context.Context, key strin
 }
 func (f *fakeStorage) GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error) {
 	return softwarecomposition.SBOMSyft{}, nil
+}
+func (f *fakeStorage) GetCollapseSettings(ctx context.Context) dynamicpathdetector.CollapseSettings {
+	return dynamicpathdetector.DefaultCollapseSettings()
 }
 func (f *fakeStorage) GetTsContainerProfile(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
 	return softwarecomposition.ContainerProfile{}, nil

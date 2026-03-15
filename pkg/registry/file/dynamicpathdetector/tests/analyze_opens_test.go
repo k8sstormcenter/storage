@@ -789,12 +789,12 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 		assert.Equal(t, 8, len(result), "/etc paths should NOT collapse (8 < 100), got: %v", pathsFromResult(result))
 	})
 
-	t.Run("unconfigured prefix /var/log uses default threshold", func(t *testing.T) {
-		defaultThreshold := dynamicpathdetector.DefaultCollapseConfig.Threshold
+	t.Run("/var/log uses its own threshold 10", func(t *testing.T) {
+		varLogThreshold := 10 // from DefaultCollapseConfigs
 		// At threshold — should NOT collapse
 		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
 		var input []types.OpenCalls
-		for i := 0; i < defaultThreshold; i++ {
+		for i := 0; i < varLogThreshold; i++ {
 			input = append(input, types.OpenCalls{
 				Path:  fmt.Sprintf("/var/log/app%d.log", i),
 				Flags: []string{"READ"},
@@ -802,19 +802,19 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 		}
 		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, mapset.NewSet[string]())
 		assert.NoError(t, err)
-		assert.Equal(t, defaultThreshold, len(result),
-			"/var/log at exactly default threshold %d should NOT collapse", defaultThreshold)
+		assert.Equal(t, varLogThreshold, len(result),
+			"/var/log at exactly threshold %d should NOT collapse", varLogThreshold)
 
 		// One more — should collapse
 		analyzer2 := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
 		input = append(input, types.OpenCalls{
-			Path:  fmt.Sprintf("/var/log/app%d.log", defaultThreshold),
+			Path:  fmt.Sprintf("/var/log/app%d.log", varLogThreshold),
 			Flags: []string{"READ"},
 		})
 		result2, err := dynamicpathdetector.AnalyzeOpens(input, analyzer2, mapset.NewSet[string]())
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result2),
-			"/var/log exceeding default threshold %d should collapse", defaultThreshold)
+			"/var/log exceeding threshold %d should collapse", varLogThreshold)
 	})
 
 	t.Run("/var/run uses its own threshold 3, not default", func(t *testing.T) {
@@ -911,8 +911,8 @@ func TestFindConfigForPath(t *testing.T) {
 		},
 		{
 			path:              "/var/log/app.log",
-			expectedPrefix:    "/",
-			expectedThreshold: dynamicpathdetector.DefaultCollapseConfig.Threshold,
+			expectedPrefix:    "/var/log",
+			expectedThreshold: 10,
 		},
 	}
 

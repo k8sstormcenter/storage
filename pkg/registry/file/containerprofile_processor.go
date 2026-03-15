@@ -149,7 +149,8 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 	} else {
 		logger.L().Debug("ContainerProfileProcessor.PreSave - failed to get sbom name", loggerhelpers.Error(err), loggerhelpers.String("imageTag", profile.Spec.ImageTag), loggerhelpers.String("imageID", profile.Spec.ImageID))
 	}
-	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet)
+	settings := a.ContainerProfileStorage.GetCollapseSettings(ctx)
+	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet, settings)
 	size += len(profile.Spec.Execs)
 	size += len(profile.Spec.Opens)
 	size += len(profile.Spec.Syscalls)
@@ -706,13 +707,17 @@ func (a *ContainerProfileProcessor) getAggregatedData(ctx context.Context, key s
 	return status, completion, hash
 }
 
-func DeflateContainerProfileSpec(container softwarecomposition.ContainerProfileSpec, sbomSet mapset.Set[string]) softwarecomposition.ContainerProfileSpec {
-	opens, err := dynamicpathdetector.AnalyzeOpens(container.Opens, dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs), sbomSet)
+func DeflateContainerProfileSpec(container softwarecomposition.ContainerProfileSpec, sbomSet mapset.Set[string], settings ...dynamicpathdetector.CollapseSettings) softwarecomposition.ContainerProfileSpec {
+	s := dynamicpathdetector.DefaultCollapseSettings()
+	if len(settings) > 0 {
+		s = settings[0]
+	}
+	opens, err := dynamicpathdetector.AnalyzeOpens(container.Opens, dynamicpathdetector.NewPathAnalyzerWithConfigs(s.OpenDynamicThreshold, s.CollapseConfigs), sbomSet)
 	if err != nil {
 		logger.L().Debug("ContainerProfileProcessor.deflateContainerProfileSpec - falling back to DeflateStringer for opens", loggerhelpers.Error(err))
 		opens = DeflateStringer(container.Opens)
 	}
-	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.EndpointDynamicThreshold, nil))
+	endpoints := dynamicpathdetector.AnalyzeEndpoints(&container.Endpoints, dynamicpathdetector.NewPathAnalyzerWithConfigs(s.EndpointDynamicThreshold, nil))
 	identifiedCallStacks := callstack.UnifyIdentifiedCallStacks(container.IdentifiedCallStacks)
 
 	return softwarecomposition.ContainerProfileSpec{

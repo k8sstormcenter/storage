@@ -279,7 +279,7 @@ func TestDeflateApplicationProfileContainer_CollapsesManyOpens(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	assert.Less(t, len(result.Opens), numOpens,
 		"%d .so files should be collapsed, got %d opens", numOpens, len(result.Opens))
@@ -315,7 +315,7 @@ func TestDeflateApplicationProfileContainer_SbomPathsPreserved(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, sbomSet)
+	result := deflateApplicationProfileContainer(container, sbomSet, dynamicpathdetector.DefaultCollapseSettings())
 
 	// SBOM paths must NEVER be collapsed — they map to specific library files
 	// used for vulnerability scanning. Collapsing them makes vuln results
@@ -363,7 +363,7 @@ func TestDeflateApplicationProfileContainer_MixedPathsCollapse(t *testing.T) {
 		Opens: opens,
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	// Count paths by prefix
 	var usrLibPaths, etcPaths, tmpPaths int
@@ -395,7 +395,7 @@ func TestDeflateApplicationProfileContainer_NilSbomNoError(t *testing.T) {
 		},
 	}
 
-	result := deflateApplicationProfileContainer(container, nil)
+	result := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
 
 	// All 3 paths should remain (below any threshold)
 	assert.Equal(t, 3, len(result.Opens), "paths below threshold should not collapse")
