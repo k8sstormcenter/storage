@@ -18,17 +18,65 @@ on:
             type: boolean
             required: false
             default: false
+    push:
+      branches:
+        - feature/exec
+        - mainbackup
+
 jobs:
+  prepare:
+    name: Resolve build parameters
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.params.outputs.image_tag }}
+      client: ${{ steps.params.outputs.client }}
+      platforms: ${{ steps.params.outputs.platforms }}
+      cosign: ${{ steps.params.outputs.cosign }}
+    steps:
+      - id: params
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "image_tag=${{ inputs.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
+            echo "client=${{ inputs.CLIENT }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=${{ inputs.PLATFORMS }}" >> "$GITHUB_OUTPUT"
+            echo "cosign=${{ inputs.CO_SIGN }}" >> "$GITHUB_OUTPUT"
+          else
+            # Push trigger: derive tag from short commit SHA
+            echo "image_tag=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "client=test" >> "$GITHUB_OUTPUT"
+            echo "platforms=false" >> "$GITHUB_OUTPUT"
+            echo "cosign=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish-image:
+    needs: prepare
     permissions:
       id-token: write
       packages: write
       contents: read
     uses: ./.github/workflows/publish-image.yaml
     with:
-      client: ${{ inputs.CLIENT }}
-      image_name: "quay.io/${{ github.repository_owner }}/storge"
-      image_tag: ${{ inputs.IMAGE_TAG }}
-      support_platforms: ${{ inputs.PLATFORMS }}
-      cosign: ${{ inputs.CO_SIGN }}
+      client: ${{ needs.prepare.outputs.client }}
+      image_name: "ghcr.io/${{ github.repository_owner }}/storage"
+      image_tag: ${{ needs.prepare.outputs.image_tag }}
+      support_platforms: ${{ needs.prepare.outputs.platforms == 'true' }}
+      cosign: ${{ needs.prepare.outputs.cosign == 'true' }}
     secrets: inherit
+
+  trigger-node-agent:
+    needs: [prepare, publish-image]
+    name: Trigger node-agent rebuild with matching tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger node-agent build
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
+        run: |
+          IMAGE_TAG="${{ needs.prepare.outputs.image_tag }}"
+          STORAGE_REF="${GITHUB_SHA}"
+          echo "Triggering node-agent build with IMAGE_TAG=${IMAGE_TAG} STORAGE_REF=${STORAGE_REF} (commit)"
+          gh workflow run build.yaml \
+            --repo "${{ github.repository_owner }}/node-agent" \
+            --ref "${{ github.ref_name }}" \
+            -f IMAGE_TAG="${IMAGE_TAG}" \
+            -f STORAGE_REF="${STORAGE_REF}"
