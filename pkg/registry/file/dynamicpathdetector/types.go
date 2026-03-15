@@ -22,10 +22,25 @@ type CollapseConfig struct {
 // exceeds the threshold.
 var DefaultCollapseConfigs = []CollapseConfig{
 	{Prefix: "/etc", Threshold: 100},
-	{Prefix: "/etc/apache2", Threshold: 5}, //this is mostly for our webapp standard test
+	{Prefix: "/etc/apache2", Threshold: 5}, // webapp standard test
+	{Prefix: "/lib", Threshold: 50},
+	{Prefix: "/lib/x86_64-linux-gnu", Threshold: 20},
+	{Prefix: "/usr", Threshold: 50},
+	{Prefix: "/usr/lib", Threshold: 30},
+	{Prefix: "/usr/bin", Threshold: 20},
+	{Prefix: "/usr/share", Threshold: 30},
+	{Prefix: "/usr/local", Threshold: 20},
 	{Prefix: "/opt", Threshold: 5},
+	{Prefix: "/var", Threshold: 30},
 	{Prefix: "/var/run", Threshold: 3},
+	{Prefix: "/var/log", Threshold: 10},
+	{Prefix: "/var/lib", Threshold: 20},
+	{Prefix: "/tmp", Threshold: 10},
+	{Prefix: "/run", Threshold: 10},
+	{Prefix: "/proc", Threshold: 50},
+	{Prefix: "/sys", Threshold: 50},
 	{Prefix: "/app", Threshold: 1},
+	{Prefix: "/home", Threshold: 20},
 }
 
 const OpenDynamicThreshold = 50

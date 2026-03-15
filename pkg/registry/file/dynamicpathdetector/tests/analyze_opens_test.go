@@ -789,12 +789,12 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 		assert.Equal(t, 8, len(result), "/etc paths should NOT collapse (8 < 100), got: %v", pathsFromResult(result))
 	})
 
-	t.Run("unconfigured prefix /var/log uses default threshold", func(t *testing.T) {
-		defaultThreshold := dynamicpathdetector.DefaultCollapseConfig.Threshold
+	t.Run("/var/log uses its own threshold 10", func(t *testing.T) {
+		varLogThreshold := 10 // from DefaultCollapseConfigs
 		// At threshold — should NOT collapse
 		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
 		var input []types.OpenCalls
-		for i := 0; i < defaultThreshold; i++ {
+		for i := 0; i < varLogThreshold; i++ {
 			input = append(input, types.OpenCalls{
 				Path:  fmt.Sprintf("/var/log/app%d.log", i),
 				Flags: []string{"READ"},
@@ -802,19 +802,19 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 		}
 		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, mapset.NewSet[string]())
 		assert.NoError(t, err)
-		assert.Equal(t, defaultThreshold, len(result),
-			"/var/log at exactly default threshold %d should NOT collapse", defaultThreshold)
+		assert.Equal(t, varLogThreshold, len(result),
+			"/var/log at exactly threshold %d should NOT collapse", varLogThreshold)
 
 		// One more — should collapse
 		analyzer2 := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
 		input = append(input, types.OpenCalls{
-			Path:  fmt.Sprintf("/var/log/app%d.log", defaultThreshold),
+			Path:  fmt.Sprintf("/var/log/app%d.log", varLogThreshold),
 			Flags: []string{"READ"},
 		})
 		result2, err := dynamicpathdetector.AnalyzeOpens(input, analyzer2, mapset.NewSet[string]())
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result2),
-			"/var/log exceeding default threshold %d should collapse", defaultThreshold)
+			"/var/log exceeding threshold %d should collapse", varLogThreshold)
 	})
 
 	t.Run("/var/run uses its own threshold 3, not default", func(t *testing.T) {
@@ -911,8 +911,8 @@ func TestFindConfigForPath(t *testing.T) {
 		},
 		{
 			path:              "/var/log/app.log",
-			expectedPrefix:    "/",
-			expectedThreshold: dynamicpathdetector.DefaultCollapseConfig.Threshold,
+			expectedPrefix:    "/var/log",
+			expectedThreshold: 10,
 		},
 	}
 
@@ -926,4 +926,116 @@ func TestFindConfigForPath(t *testing.T) {
 				"path %q should have threshold %d", tt.path, tt.expectedThreshold)
 		})
 	}
+}
+
+// TestConsolidateOpens_ViaAnalyzeOpens tests the post-collapse consolidation
+// that removes individual paths subsumed by wildcard/dynamic patterns.
+func TestConsolidateOpens_ViaAnalyzeOpens(t *testing.T) {
+	t.Run("dynamic identifier subsumes single-segment siblings", func(t *testing.T) {
+		// With threshold=3, 4 children under /etc triggers collapse to /etc/⋯.
+		// Then /etc/hosts (single segment) should be subsumed by /etc/⋯.
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(50, []dynamicpathdetector.CollapseConfig{
+			{Prefix: "/etc", Threshold: 3},
+		})
+		input := []types.OpenCalls{
+			{Path: "/etc/file1", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/file2", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/file3", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/hosts", Flags: []string{"O_RDONLY"}},
+		}
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, nil)
+		assert.NoError(t, err)
+
+		paths := extractPaths(result)
+		assert.Contains(t, paths, "/etc/\u22ef", "should have dynamic pattern")
+		assert.NotContains(t, paths, "/etc/hosts", "single-segment path should be subsumed by /etc/⋯")
+		assert.NotContains(t, paths, "/etc/file1", "should be subsumed")
+	})
+
+	t.Run("dynamic identifier does NOT subsume multi-segment paths", func(t *testing.T) {
+		// /etc/⋯ matches single segment only; /etc/nginx/conf.d has 2 extra segments.
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(50, []dynamicpathdetector.CollapseConfig{
+			{Prefix: "/etc", Threshold: 3},
+		})
+		input := []types.OpenCalls{
+			{Path: "/etc/file1", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/file2", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/file3", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/hosts", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/nginx/conf.d/default.conf", Flags: []string{"O_RDONLY"}},
+		}
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, nil)
+		assert.NoError(t, err)
+
+		paths := extractPaths(result)
+		assert.Contains(t, paths, "/etc/\u22ef", "should have dynamic pattern")
+		// The trie collapses "nginx" to ⋯ (since it's a new child under /etc which already collapsed),
+		// producing /etc/⋯/conf.d/default.conf. This multi-segment path is NOT subsumed by /etc/⋯
+		// because ⋯ matches single segment only.
+		assert.Contains(t, paths, "/etc/\u22ef/conf.d/default.conf",
+			"multi-segment path should NOT be subsumed by /etc/⋯")
+	})
+
+	t.Run("flags from subsumed paths merge into pattern", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(50, []dynamicpathdetector.CollapseConfig{
+			{Prefix: "/tmp", Threshold: 2},
+		})
+		input := []types.OpenCalls{
+			{Path: "/tmp/a", Flags: []string{"O_RDONLY"}},
+			{Path: "/tmp/b", Flags: []string{"O_WRONLY"}},
+			{Path: "/tmp/c", Flags: []string{"O_RDWR"}},
+		}
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, nil)
+		assert.NoError(t, err)
+
+		// Should consolidate to just /tmp/⋯ with all flags merged
+		assert.Len(t, result, 1, "all paths should consolidate into one pattern")
+		assert.Equal(t, "/tmp/\u22ef", result[0].Path)
+		// All three flags should be present (sorted)
+		assert.Contains(t, result[0].Flags, "O_RDONLY")
+		assert.Contains(t, result[0].Flags, "O_WRONLY")
+		assert.Contains(t, result[0].Flags, "O_RDWR")
+	})
+
+	t.Run("sbom paths never subsumed by consolidation", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(50, []dynamicpathdetector.CollapseConfig{
+			{Prefix: "/usr/lib", Threshold: 3},
+		})
+		sbomSet := mapset.NewThreadUnsafeSet[string]("/usr/lib/libcrypto.so.3")
+		input := []types.OpenCalls{
+			{Path: "/usr/lib/libcrypto.so.3", Flags: []string{"O_RDONLY"}},
+			{Path: "/usr/lib/libssl.so.3", Flags: []string{"O_RDONLY"}},
+			{Path: "/usr/lib/libz.so.1", Flags: []string{"O_RDONLY"}},
+			{Path: "/usr/lib/libm.so.6", Flags: []string{"O_RDONLY"}},
+		}
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, sbomSet)
+		assert.NoError(t, err)
+
+		paths := extractPaths(result)
+		assert.Contains(t, paths, "/usr/lib/libcrypto.so.3", "SBOM path must survive consolidation")
+		assert.Contains(t, paths, "/usr/lib/\u22ef", "dynamic pattern should exist")
+		// Non-SBOM siblings should be subsumed
+		assert.NotContains(t, paths, "/usr/lib/libssl.so.3", "non-SBOM path should be subsumed")
+		assert.NotContains(t, paths, "/usr/lib/libm.so.6", "non-SBOM path should be subsumed")
+	})
+
+	t.Run("no patterns means no consolidation", func(t *testing.T) {
+		// threshold high enough that nothing collapses
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(100, nil)
+		input := []types.OpenCalls{
+			{Path: "/etc/hosts", Flags: []string{"O_RDONLY"}},
+			{Path: "/etc/passwd", Flags: []string{"O_RDONLY"}},
+		}
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, nil)
+		assert.NoError(t, err)
+		assert.Len(t, result, 2, "no collapse means no consolidation")
+	})
+}
+
+func extractPaths(opens []types.OpenCalls) []string {
+	paths := make([]string, len(opens))
+	for i, o := range opens {
+		paths[i] = o.Path
+	}
+	return paths
 }

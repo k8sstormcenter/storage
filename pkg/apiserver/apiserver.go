@@ -27,6 +27,7 @@ import (
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/configurationscansummary"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/containerprofile"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/generatednetworkpolicy"
+	collapseconfiguration "github.com/kubescape/storage/pkg/registry/softwarecomposition/collapseconfiguration"
 	knownserver "github.com/kubescape/storage/pkg/registry/softwarecomposition/knownservers"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/networkneighborhood"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/openvulnerabilityexchange"
@@ -163,6 +164,7 @@ func (c completedConfig) New() (*WardleServer, error) {
 		"configurationscansummaries":          ep(configurationscansummary.NewREST, configScanStorageImpl),
 		"containerprofiles":                   ep(containerprofile.NewREST, containerProfileStorageImpl),
 		"generatednetworkpolicies":            ep(generatednetworkpolicy.NewREST, generatedNetworkPolicyStorage),
+		"collapseconfigurations":              ep(collapseconfiguration.NewREST),
 		"knownservers":                        ep(knownserver.NewREST),
 		"networkneighborhoods":                ep(networkneighborhood.NewREST, networkNeighborhoodStorageImpl),
 		"openvulnerabilityexchangecontainers": ep(openvulnerabilityexchange.NewREST),

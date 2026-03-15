@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/kubescape/k8s-interface/instanceidhandler/v1/helpers"
+	"github.com/kubescape/go-logger"
+	loggerhelpers "github.com/kubescape/go-logger/helpers"
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
+	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 	"github.com/kubescape/storage/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,6 +83,24 @@ func (c *ContainerProfileStorageImpl) GetSbom(ctx context.Context, key string) (
 	sbom := softwarecomposition.SBOMSyft{}
 	err := c.storageImpl.GetWithConn(ctx, conn, key, storage.GetOptions{}, &sbom)
 	return sbom, err
+}
+
+func (c *ContainerProfileStorageImpl) GetCollapseSettings(ctx context.Context) dynamicpathdetector.CollapseSettings {
+	var list softwarecomposition.CollapseConfigurationList
+	if err := c.storageImpl.GetByCluster(ctx, softwarecomposition.GroupName, "collapseconfigurations", &list); err != nil {
+		logger.L().Debug("GetCollapseSettings - failed to list CollapseConfigurations, using defaults", loggerhelpers.Error(err))
+		return dynamicpathdetector.DefaultCollapseSettings()
+	}
+	if len(list.Items) == 0 {
+		return dynamicpathdetector.DefaultCollapseSettings()
+	}
+	// use the first (or "default") CRD found
+	for i := range list.Items {
+		if list.Items[i].Name == "default" {
+			return dynamicpathdetector.CollapseSettingsFromCRD(&list.Items[i])
+		}
+	}
+	return dynamicpathdetector.CollapseSettingsFromCRD(&list.Items[0])
 }
 
 func (c *ContainerProfileStorageImpl) GetStorageImpl() *StorageImpl {

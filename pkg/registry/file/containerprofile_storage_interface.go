@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
+	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -50,6 +51,10 @@ type ContainerProfileStorage interface {
 	// GetSbom retrieves an SBOM by key.
 	// Returns storage.ErrCodeKeyNotFound if not found or not implemented.
 	GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error)
+
+	// GetCollapseSettings reads the CollapseConfiguration CRD named "default" and
+	// converts it to CollapseSettings. Falls back to hardcoded defaults if not found.
+	GetCollapseSettings(ctx context.Context) dynamicpathdetector.CollapseSettings
 
 	// GetTsContainerProfile retrieves a time-series container profile.
 	// This bypasses locking mechanisms used by GetContainerProfile.
