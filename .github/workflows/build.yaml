@@ -20,7 +20,7 @@ on:
             default: false
     push:
       branches:
-        - feature/exec
+        - sync/upstream-merge
         - mainbackup
 
 jobs:
