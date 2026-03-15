@@ -537,6 +537,128 @@ func TestAnalyzeOpens_NilSbomSetWithCollapse(t *testing.T) {
 		"collapsed path should contain dynamic or wildcard segment, got %q", result[0].Path)
 }
 
+// TestAnalyzeOpens_SbomPathsNeverCollapsed proves that paths present in the
+// sbomSet are always preserved verbatim, even when surrounding paths exceed
+// the collapse threshold. This is critical: SBOM paths map to specific
+// library files used for vulnerability scanning — collapsing them would
+// make vulnerability results non-reproducible.
+func TestAnalyzeOpens_SbomPathsNeverCollapsed(t *testing.T) {
+	threshold := configThreshold("/var/run") // low threshold to trigger collapse easily
+
+	sbomPaths := []string{
+		"/usr/lib/libcrypto.so.3",
+		"/usr/lib/libssl.so.3",
+		"/usr/lib/libz.so.1",
+	}
+	sbomSet := mapset.NewSet[string](sbomPaths...)
+
+	t.Run("sbom paths survive collapse when siblings exceed threshold", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(threshold, nil)
+
+		// Generate threshold+1 non-SBOM paths under /usr/lib to trigger collapse
+		var input []types.OpenCalls
+		for i := 0; i < threshold+1; i++ {
+			input = append(input, types.OpenCalls{
+				Path:  fmt.Sprintf("/usr/lib/libextra_%d.so", i),
+				Flags: []string{"READ"},
+			})
+		}
+		// Add SBOM paths — these must survive even though /usr/lib/ children > threshold
+		for _, p := range sbomPaths {
+			input = append(input, types.OpenCalls{
+				Path:  p,
+				Flags: []string{"READ"},
+			})
+		}
+
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, sbomSet)
+		assert.NoError(t, err)
+
+		// Every SBOM path must appear in the output with its exact original path
+		resultPaths := pathsFromResult(result)
+		for _, sp := range sbomPaths {
+			assert.Contains(t, resultPaths, sp,
+				"SBOM path %q must be preserved verbatim in output, got: %v", sp, resultPaths)
+		}
+	})
+
+	t.Run("sbom paths retain their original flags", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(threshold, nil)
+
+		var input []types.OpenCalls
+		for i := 0; i < threshold+1; i++ {
+			input = append(input, types.OpenCalls{
+				Path:  fmt.Sprintf("/usr/lib/libother_%d.so", i),
+				Flags: []string{"WRITE"},
+			})
+		}
+		input = append(input, types.OpenCalls{
+			Path:  "/usr/lib/libcrypto.so.3",
+			Flags: []string{"READ", "MMAP"},
+		})
+
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, sbomSet)
+		assert.NoError(t, err)
+
+		for _, r := range result {
+			if r.Path == "/usr/lib/libcrypto.so.3" {
+				assert.ElementsMatch(t, []string{"READ", "MMAP"}, r.Flags,
+					"SBOM path flags must be preserved exactly, not merged with collapsed siblings")
+				return
+			}
+		}
+		t.Fatal("SBOM path /usr/lib/libcrypto.so.3 not found in output")
+	})
+
+	t.Run("non-sbom paths still collapse normally", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(threshold, nil)
+
+		var input []types.OpenCalls
+		for i := 0; i < threshold+1; i++ {
+			input = append(input, types.OpenCalls{
+				Path:  fmt.Sprintf("/var/data/file%d.dat", i),
+				Flags: []string{"READ"},
+			})
+		}
+		// Add one SBOM path under a different prefix — should be preserved but
+		// should not prevent /var/data from collapsing
+		input = append(input, types.OpenCalls{
+			Path:  "/usr/lib/libcrypto.so.3",
+			Flags: []string{"READ"},
+		})
+
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, sbomSet)
+		assert.NoError(t, err)
+
+		varDataPaths := filterByPrefix(result, "/var/data/")
+		assert.Equal(t, 1, len(varDataPaths),
+			"non-SBOM paths under /var/data should still collapse, got: %v", pathsFromResult(varDataPaths))
+		assert.True(t,
+			strings.Contains(varDataPaths[0].Path, "\u22ef") || strings.Contains(varDataPaths[0].Path, "*"),
+			"collapsed path should contain dynamic segment, got %q", varDataPaths[0].Path)
+
+		// SBOM path must still be present
+		assert.Contains(t, pathsFromResult(result), "/usr/lib/libcrypto.so.3")
+	})
+
+	t.Run("empty sbomSet does not protect any paths", func(t *testing.T) {
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(threshold, nil)
+		emptySbom := mapset.NewSet[string]()
+
+		var input []types.OpenCalls
+		for i := 0; i < threshold+1; i++ {
+			input = append(input, types.OpenCalls{
+				Path:  fmt.Sprintf("/usr/lib/lib%d.so", i),
+				Flags: []string{"READ"},
+			})
+		}
+
+		result, err := dynamicpathdetector.AnalyzeOpens(input, analyzer, emptySbom)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result), "with empty sbomSet, all paths should collapse normally")
+	})
+}
+
 // --- Helpers ---
 
 // generateOpenCallsWithFlags creates N OpenCalls under prefix/userN/filename with rotating flags.
