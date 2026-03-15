@@ -47,9 +47,63 @@ func AnalyzeOpens(opens []types.OpenCalls, analyzer *PathAnalyzer, sbomSet mapse
 		}
 	}
 
-	return slices.SortedFunc(maps.Values(dynamicOpens), func(a, b types.OpenCalls) int {
+	result := slices.SortedFunc(maps.Values(dynamicOpens), func(a, b types.OpenCalls) int {
 		return strings.Compare(a.Path, b.Path)
-	}), nil
+	})
+
+	return consolidateOpens(result, sbomSet), nil
+}
+
+// consolidateOpens removes paths that are subsumed by a wildcard or dynamic
+// identifier already present in the result. For example, if "/etc/*" is present,
+// "/etc/hosts" and "/etc/nginx/conf.d" are removed because they are already covered.
+func consolidateOpens(opens []types.OpenCalls, sbomSet mapset.Set[string]) []types.OpenCalls {
+	if len(opens) <= 1 {
+		return opens
+	}
+
+	// Collect indices of paths that contain wildcards or dynamic identifiers
+	patternIdx := map[int]bool{}
+	for i, o := range opens {
+		if strings.Contains(o.Path, WildcardIdentifier) || strings.Contains(o.Path, DynamicIdentifier) {
+			patternIdx[i] = true
+		}
+	}
+	if len(patternIdx) == 0 {
+		return opens
+	}
+
+	// Track which entries to keep and accumulate merged flags into patterns
+	keep := make([]bool, len(opens))
+	for i := range opens {
+		keep[i] = true
+	}
+
+	for i, o := range opens {
+		if patternIdx[i] {
+			continue // patterns always kept
+		}
+		// SBOM paths must never be consolidated away
+		if sbomSet != nil && sbomSet.ContainsOne(o.Path) {
+			continue
+		}
+		for pi := range patternIdx {
+			if CompareDynamic(opens[pi].Path, o.Path) {
+				// o is subsumed by pattern at pi — merge flags into the pattern
+				opens[pi].Flags = mapset.Sorted(mapset.NewThreadUnsafeSet(slices.Concat(opens[pi].Flags, o.Flags)...))
+				keep[i] = false
+				break
+			}
+		}
+	}
+
+	var result []types.OpenCalls
+	for i, o := range opens {
+		if keep[i] {
+			result = append(result, o)
+		}
+	}
+	return result
 }
 
 func AnalyzeOpen(path string, analyzer *PathAnalyzer) (string, error) {
