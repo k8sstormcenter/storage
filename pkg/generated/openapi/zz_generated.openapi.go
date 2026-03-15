@@ -43,6 +43,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.CPE{}.OpenAPIModelName():                                        schema_pkg_apis_softwarecomposition_v1beta1_CPE(ref),
 		v1beta1.CallStack{}.OpenAPIModelName():                                  schema_pkg_apis_softwarecomposition_v1beta1_CallStack(ref),
 		v1beta1.CallStackNode{}.OpenAPIModelName():                              schema_pkg_apis_softwarecomposition_v1beta1_CallStackNode(ref),
+		v1beta1.CollapseConfigEntry{}.OpenAPIModelName():                        schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigEntry(ref),
+		v1beta1.CollapseConfiguration{}.OpenAPIModelName():                       schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfiguration(ref),
+		v1beta1.CollapseConfigurationList{}.OpenAPIModelName():                   schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigurationList(ref),
+		v1beta1.CollapseConfigurationSpec{}.OpenAPIModelName():                   schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigurationSpec(ref),
 		v1beta1.Component{}.OpenAPIModelName():                                  schema_pkg_apis_softwarecomposition_v1beta1_Component(ref),
 		v1beta1.Condition{}.OpenAPIModelName():                                  schema_pkg_apis_softwarecomposition_v1beta1_Condition(ref),
 		v1beta1.ConditionedStatus{}.OpenAPIModelName():                          schema_pkg_apis_softwarecomposition_v1beta1_ConditionedStatus(ref),
@@ -754,6 +758,173 @@ func schema_pkg_apis_softwarecomposition_v1beta1_CallStackNode(ref common.Refere
 		},
 		Dependencies: []string{
 			v1beta1.CallStackNode{}.OpenAPIModelName(), v1beta1.StackFrame{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigEntry(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CollapseConfigEntry defines a per-prefix collapse threshold.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"prefix": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Prefix is the path prefix to match (e.g. \"/etc\", \"/opt\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"threshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Threshold is the max unique children before collapsing.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"prefix", "threshold"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CollapseConfiguration defines cluster-wide thresholds for dynamic path collapsing in ApplicationProfiles. It is signable and auditable.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1beta1.CollapseConfigurationSpec{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.CollapseConfigurationSpec{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CollapseConfigurationList is a list of CollapseConfiguration resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1beta1.CollapseConfiguration{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.CollapseConfiguration{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigurationSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CollapseConfigurationSpec holds the collapse thresholds.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"openDynamicThreshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OpenDynamicThreshold is the default threshold for open-path collapsing.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"endpointDynamicThreshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndpointDynamicThreshold is the default threshold for endpoint collapsing.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"collapseConfigs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CollapseConfigs defines per-prefix threshold overrides.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1beta1.CollapseConfigEntry{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"openDynamicThreshold", "endpointDynamicThreshold"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.CollapseConfigEntry{}.OpenAPIModelName()},
 	}
 }
 
