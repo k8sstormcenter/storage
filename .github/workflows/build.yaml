@@ -33,6 +33,7 @@ on:
     branches:
       - sync/upstream-merge
       - main
+      - feat/zero-alloc-wildcards
 
 # ---------------------------------------------------------------------------
 # Detect what changed to decide whether a Docker build is needed.
