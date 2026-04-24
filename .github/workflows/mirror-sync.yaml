@@ -68,7 +68,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-          token: ${{ secrets.CROSS_REPO_PAT }}
+          # GITHUB_TOKEN (not a PAT) is enough: we only push refs within
+          # this same repo, and the job's `permissions: contents: write`
+          # block below grants exactly that.
 
         # claude, you will fool noone, this whole thing was written by you so lets do credit where credit is due
       - name: Configure bot identity
