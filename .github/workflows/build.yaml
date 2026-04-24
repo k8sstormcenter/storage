@@ -67,6 +67,7 @@ jobs:
       client: ${{ steps.params.outputs.client }}
       platforms: ${{ steps.params.outputs.platforms }}
       build_ref: ${{ steps.params.outputs.build_ref }}
+      build_sha: ${{ steps.sha.outputs.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,6 +81,14 @@ jobs:
           # On push, inputs.SOURCE_REF is null, so this falls through to
           # github.ref (the pushed branch).
           ref: ${{ inputs.SOURCE_REF || github.ref }}
+
+      - name: Record checked-out SHA
+        id: sha
+        # The SHA we pass downstream (STORAGE_REF → node-agent) must be
+        # the SHA we just checked out, NOT github.sha (which is main's
+        # tip when the workflow was dispatched --ref main). This is the
+        # single source of truth for "which storage commit was built".
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Check for image-affecting code changes
         id: check
@@ -198,7 +207,10 @@ jobs:
           GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
         run: |
           IMAGE_TAG="${{ needs.detect-changes.outputs.image_tag }}"
-          STORAGE_REF="${GITHUB_SHA}"
+          # The SHA of the storage commit we actually built — NOT github.sha
+          # (which is main's tip for workflow_dispatch --ref main). node-agent
+          # uses this value in `go mod edit -replace storage=...@STORAGE_REF`.
+          STORAGE_REF="${{ needs.detect-changes.outputs.build_sha }}"
           # Dispatch node-agent on the same ref shape we just built. If
           # SOURCE_REF was set (building an upstream-pr/** branch), tell
           # node-agent to build its matching upstream-pr/** branch too.
