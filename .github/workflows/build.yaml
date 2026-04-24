@@ -15,9 +15,10 @@
 # branches pristine for upstream reviewers while still running our fork CI
 # against their code.
 #
-# Triggers deliberately exclude pull_request/pull_request_target. External
-# contributors and forks-of-our-fork never run this — see the
-# `github.repository_owner == 'k8sstormcenter'` guards on every job.
+# Triggers deliberately exclude pull_request/pull_request_target, so external
+# contributors have no path to run this. workflow_dispatch and push to main /
+# sync/upstream-merge both require repo write access. Forks-of-our-fork run
+# in their own repo context with their own (empty) secrets — not a concern.
 # =============================================================================
 
 name: build-image
@@ -59,10 +60,6 @@ on:
 # ---------------------------------------------------------------------------
 jobs:
   detect-changes:
-    # Never run this on forks-of-our-fork. A repo-owner guard keeps
-    # every job silent if someone clones k8sstormcenter/storage and
-    # leaves Actions enabled.
-    if: github.repository_owner == 'k8sstormcenter'
     runs-on: ubuntu-latest
     outputs:
       needs_build: ${{ steps.check.outputs.needs_build }}
@@ -138,7 +135,7 @@ jobs:
   # -------------------------------------------------------------------
   build-and-push-image:
     needs: detect-changes
-    if: needs.detect-changes.outputs.needs_build == 'true' && github.repository_owner == 'k8sstormcenter'
+    if: needs.detect-changes.outputs.needs_build == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -193,7 +190,6 @@ jobs:
   # -------------------------------------------------------------------
   trigger-node-agent:
     needs: [detect-changes, build-and-push-image]
-    if: github.repository_owner == 'k8sstormcenter'
     name: Trigger node-agent rebuild with matching tag
     runs-on: ubuntu-latest
     steps:
