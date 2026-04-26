@@ -1,34 +1,225 @@
+# =============================================================================
+# Storage Build & Push
+# =============================================================================
+#
+# On push (main / sync/upstream-merge only): detect whether image-affecting
+# code changed. If only docs, tests, or CI files changed, skip the Docker
+# build and node-agent trigger entirely.
+#
+# On workflow_dispatch: always build (or honour the build_image flag).
+# Optional SOURCE_REF input lets this workflow build any branch — notably
+# upstream-pr/** — without that branch ever needing fork-specific workflow
+# files. The workflow file itself is resolved at dispatch time from the
+# `--ref main` the caller dispatches against; the subsequent checkout then
+# switches the working tree to SOURCE_REF. This is how we keep upstream-PR
+# branches pristine for upstream reviewers while still running our fork CI
+# against their code.
+#
+# Triggers deliberately exclude pull_request/pull_request_target, so external
+# contributors have no path to run this. workflow_dispatch and push to main /
+# sync/upstream-merge both require repo write access. Forks-of-our-fork run
+# in their own repo context with their own (empty) secrets — not a concern.
+# =============================================================================
+
 name: build-image
 
 on:
-    workflow_dispatch:
-      inputs:
-        CLIENT:
-          required: false
-          type: string
-          default: "test"
-        IMAGE_TAG:
-          required: true
-          type: string
-        CO_SIGN:
-          type: boolean
-          required: false
-          default: false
-        PLATFORMS:
-            type: boolean
-            required: false
-            default: false
+  workflow_dispatch:
+    inputs:
+      SOURCE_REF:
+        description: "Branch, tag, or SHA to build (defaults to the ref this workflow is dispatched against — i.e. main). Use this to build upstream-pr/** branches without ever giving them fork-specific workflow files."
+        required: false
+        type: string
+        default: ""
+      IMAGE_TAG:
+        required: true
+        type: string
+      CLIENT:
+        required: false
+        type: string
+        default: "test"
+      PLATFORMS:
+        type: boolean
+        required: false
+        default: false
+      build_image:
+        description: "Force image rebuild even if no code changes detected"
+        type: boolean
+        required: false
+        default: true
+  push:
+    branches:
+      - sync/upstream-merge
+      - main
+
+# ---------------------------------------------------------------------------
+# Detect what changed to decide whether a Docker build is needed.
+# Storage image code = anything under pkg/, build/, main.go, go.mod, go.sum,
+# vendor/, configuration/, api-rules/, hack/.
+# Non-image files = .github/, tests/, docs/, *.md, .gitignore, Makefile, etc.
+# ---------------------------------------------------------------------------
 jobs:
-  publish-image:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_build: ${{ steps.check.outputs.needs_build }}
+      image_tag: ${{ steps.params.outputs.image_tag }}
+      client: ${{ steps.params.outputs.client }}
+      platforms: ${{ steps.params.outputs.platforms }}
+      build_ref: ${{ steps.params.outputs.build_ref }}
+      build_sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          # On workflow_dispatch SOURCE_REF may point at a branch (e.g.
+          # upstream-pr/**) that has no fork workflow files of its own.
+          # That's fine — the workflow file running here was resolved
+          # against github.ref (main) before this step, so checking out
+          # a different ref now only affects the working tree.
+          # On push, inputs.SOURCE_REF is null, so this falls through to
+          # github.ref (the pushed branch).
+          ref: ${{ inputs.SOURCE_REF || github.ref }}
+
+      - name: Record checked-out SHA
+        id: sha
+        # The SHA we pass downstream (STORAGE_REF → node-agent) must be
+        # the SHA we just checked out, NOT github.sha (which is main's
+        # tip when the workflow was dispatched --ref main). This is the
+        # single source of truth for "which storage commit was built".
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for image-affecting code changes
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "Not a push event — build decision from inputs"
+            echo "needs_build=${{ inputs.build_image }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "=== Changed files ==="
+          echo "$CHANGED"
+          echo ""
+
+          # Image-affecting code: anything that ends up in the Docker image.
+          # Exclude: .github/, tests/, docs/, *.md, .gitignore, LICENSE, Makefile
+          IMAGE_CHANGES=$(echo "$CHANGED" | grep -vE '^(\.github/|tests/|docs/|.*\.md$|\.gitignore$|\.gitattributes$|LICENSE|Makefile$|\.aiexclude$)' || true)
+
+          if [ -n "$IMAGE_CHANGES" ]; then
+            echo "=== Image code changed (build needed) ==="
+            echo "$IMAGE_CHANGES"
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "=== Only non-image files changed — skipping build ==="
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve build parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "image_tag=${{ inputs.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
+            echo "client=${{ inputs.CLIENT }}" >> "$GITHUB_OUTPUT"
+            echo "platforms=${{ inputs.PLATFORMS }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "client=test" >> "$GITHUB_OUTPUT"
+            echo "platforms=false" >> "$GITHUB_OUTPUT"
+          fi
+          # build_ref is the ref the downstream build + checkout should
+          # use. On push it's the pushed ref; on dispatch it's SOURCE_REF
+          # if set, otherwise the dispatched ref.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.SOURCE_REF }}" ]; then
+            echo "build_ref=${{ inputs.SOURCE_REF }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # -------------------------------------------------------------------
+  # Build and push the storage container image.
+  # Skipped when only non-image files changed on push.
+  # -------------------------------------------------------------------
+  build-and-push-image:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.needs_build == 'true'
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       packages: write
       contents: read
-    uses: ./.github/workflows/publish-image.yaml
-    with:
-      client: ${{ inputs.CLIENT }}
-      image_name: "quay.io/${{ github.repository_owner }}/storge"
-      image_tag: ${{ inputs.IMAGE_TAG }}
-      support_platforms: ${{ inputs.PLATFORMS }}
-      cosign: ${{ inputs.CO_SIGN }}
-    secrets: inherit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ needs.detect-changes.outputs.build_ref }}
+
+      - name: Set up QEMU
+        if: needs.detect-changes.outputs.platforms == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/storage"
+          IMAGE_TAG="${{ needs.detect-changes.outputs.image_tag }}"
+          CLIENT="${{ needs.detect-changes.outputs.client }}"
+          PLATFORMS="${{ needs.detect-changes.outputs.platforms }}"
+
+          echo "Building ${IMAGE_NAME}:${IMAGE_TAG}"
+
+          PLATFORM_FLAG=""
+          if [ "$PLATFORMS" = "true" ]; then
+            PLATFORM_FLAG="--platform linux/amd64,linux/arm64"
+          fi
+
+          docker buildx build . \
+            --file build/Dockerfile \
+            --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
+            --tag "${IMAGE_NAME}:latest" \
+            --build-arg image_version="${IMAGE_TAG}" \
+            --build-arg client="${CLIENT}" \
+            --push \
+            ${PLATFORM_FLAG}
+
+  # -------------------------------------------------------------------
+  # Trigger node-agent rebuild with the matching storage image tag.
+  # Only runs after a successful image build.
+  # -------------------------------------------------------------------
+  trigger-node-agent:
+    needs: [detect-changes, build-and-push-image]
+    name: Trigger node-agent rebuild with matching tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger node-agent build
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
+        run: |
+          IMAGE_TAG="${{ needs.detect-changes.outputs.image_tag }}"
+          # The SHA of the storage commit we actually built — NOT github.sha
+          # (which is main's tip for workflow_dispatch --ref main). node-agent
+          # uses this value in `go mod edit -replace storage=...@STORAGE_REF`.
+          STORAGE_REF="${{ needs.detect-changes.outputs.build_sha }}"
+          # Dispatch node-agent on the same ref shape we just built. If
+          # SOURCE_REF was set (building an upstream-pr/** branch), tell
+          # node-agent to build its matching upstream-pr/** branch too.
+          NODE_AGENT_REF="${{ needs.detect-changes.outputs.build_ref }}"
+          # Strip refs/heads/ prefix if present (happens on push events).
+          NODE_AGENT_REF="${NODE_AGENT_REF#refs/heads/}"
+          echo "Triggering node-agent build with IMAGE_TAG=${IMAGE_TAG} STORAGE_REF=${STORAGE_REF} NODE_AGENT_REF=${NODE_AGENT_REF}"
+          gh workflow run build.yaml \
+            --repo "${{ github.repository_owner }}/node-agent" \
+            --ref "${NODE_AGENT_REF}" \
+            -f IMAGE_TAG="${IMAGE_TAG}" \
+            -f STORAGE_REF="${STORAGE_REF}"
