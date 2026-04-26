@@ -12,13 +12,13 @@ on:
         required: true
         default: 'main'
       node_agent_image:
-        description: 'Node Agent image (e.g. ghcr.io/k8sstormcenter/node-agent:latest)'
+        description: 'Node Agent image (e.g. quay.io/kubescape/node-agent:latest)'
         required: true
-        default: 'ghcr.io/k8sstormcenter/node-agent:latest'
+        default: 'quay.io/kubescape/node-agent:latest'
       storage_image:
         description: 'Storage image (e.g. quay.io/kubescape/storage:latest)'
         required: true
-        default: 'ghcr.io/k8sstormcenter/storage:latest'
+        default: 'quay.io/kubescape/storage:latest'
       extra_helm_set_args:
         description: 'Extra Helm --set arguments (comma-separated, e.g. foo=bar,bar=baz)'
         required: false
@@ -27,9 +27,6 @@ on:
 jobs:
   integration-tests:
     runs-on: ubuntu-large
-    permissions:
-      checks: write
-      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
