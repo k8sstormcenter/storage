@@ -12,6 +12,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// testCollapseConfigs gives the per-prefix thresholds this file's
+// assertions expect. It is intentionally decoupled from the production
+// DefaultCollapseConfigs so the deployed defaults and the test suite's
+// collapse-behavior coverage can evolve independently — tests that
+// probe threshold-1 / threshold-3 / threshold-5 edge cases shouldn't
+// constrain what values ship.
+var testCollapseConfigs = []dynamicpathdetector.CollapseConfig{
+	{Prefix: "/etc", Threshold: 100},
+	{Prefix: "/etc/apache2", Threshold: 5},
+	{Prefix: "/opt", Threshold: 5},
+	{Prefix: "/var/run", Threshold: 3},
+	{Prefix: "/app", Threshold: 1},
+}
+
 func TestAnalyzeOpensWithThreshold(t *testing.T) {
 	threshold := dynamicpathdetector.OpenDynamicThreshold
 	analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(threshold, nil)
@@ -722,15 +736,6 @@ func assertContainsOneOfPaths(t *testing.T, result []types.OpenCalls, alternativ
 	assert.Fail(t, fmt.Sprintf("result does not contain any of %v, got: %v", alternatives, pathsFromResult(result)))
 }
 
-func assertPathIsOneOf(t *testing.T, actual string, alternatives ...string) {
-	t.Helper()
-	for _, alt := range alternatives {
-		if actual == alt {
-			return
-		}
-	}
-	assert.Fail(t, fmt.Sprintf("path %q does not match any of %v", actual, alternatives))
-}
 
 func filterByPrefix(result []types.OpenCalls, prefix string) []types.OpenCalls {
 	var filtered []types.OpenCalls
@@ -754,7 +759,7 @@ func pathsFromResult(result []types.OpenCalls) []string {
 // (e.g., /etc at 100 and /etc/apache2 at 5) work correctly: the most specific prefix wins.
 func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	t.Run("/etc/apache2 uses threshold 5, not /etc's threshold 100", func(t *testing.T) {
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		// 6 paths under /etc/apache2/mods-enabled/ — should collapse (6 > 5)
 		var input []types.OpenCalls
 		for i := 0; i < 6; i++ {
@@ -772,7 +777,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	})
 
 	t.Run("/etc uses threshold 100, unaffected by /etc/apache2", func(t *testing.T) {
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		// 8 paths directly under /etc/ — should NOT collapse (8 < 100)
 		input := []types.OpenCalls{
 			{Path: "/etc/config1", Flags: []string{"READ"}},
@@ -792,7 +797,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	t.Run("unconfigured prefix /var/log uses default threshold", func(t *testing.T) {
 		defaultThreshold := dynamicpathdetector.DefaultCollapseConfig.Threshold
 		// At threshold — should NOT collapse
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		var input []types.OpenCalls
 		for i := 0; i < defaultThreshold; i++ {
 			input = append(input, types.OpenCalls{
@@ -806,7 +811,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 			"/var/log at exactly default threshold %d should NOT collapse", defaultThreshold)
 
 		// One more — should collapse
-		analyzer2 := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer2 := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		input = append(input, types.OpenCalls{
 			Path:  fmt.Sprintf("/var/log/app%d.log", defaultThreshold),
 			Flags: []string{"READ"},
@@ -818,7 +823,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	})
 
 	t.Run("/var/run uses its own threshold 3, not default", func(t *testing.T) {
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		// 4 paths under /var/run/ — should collapse (4 > 3)
 		input := []types.OpenCalls{
 			{Path: "/var/run/pid1.pid", Flags: []string{"READ"}},
@@ -832,7 +837,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	})
 
 	t.Run("/app uses threshold 1 (immediate wildcard)", func(t *testing.T) {
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		input := []types.OpenCalls{
 			{Path: "/app/service1/config", Flags: []string{"READ"}},
 		}
@@ -843,7 +848,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 	})
 
 	t.Run("mixed overlapping: /etc and /etc/apache2 coexist correctly", func(t *testing.T) {
-		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+		analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 		var input []types.OpenCalls
 
 		// 6 paths under /etc/apache2/conf.d/ (should collapse at threshold 5)
@@ -887,7 +892,7 @@ func TestAnalyzeOpensOverlappingPrefixConfigs(t *testing.T) {
 
 // TestFindConfigForPath verifies the config lookup returns the most specific matching prefix.
 func TestFindConfigForPath(t *testing.T) {
-	analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, dynamicpathdetector.DefaultCollapseConfigs)
+	analyzer := dynamicpathdetector.NewPathAnalyzerWithConfigs(dynamicpathdetector.OpenDynamicThreshold, testCollapseConfigs)
 
 	tests := []struct {
 		path              string

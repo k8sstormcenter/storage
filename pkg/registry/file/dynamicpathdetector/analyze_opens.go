@@ -14,17 +14,18 @@ func AnalyzeOpens(opens []types.OpenCalls, analyzer *PathAnalyzer, sbomSet mapse
 		return nil, nil
 	}
 
-	// First pass: build trie from all paths
+	if sbomSet == nil {
+		sbomSet = mapset.NewThreadUnsafeSet[string]()
+	}
+
 	dynamicOpens := make(map[string]types.OpenCalls)
 	for _, open := range opens {
 		_, _ = AnalyzeOpen(open.Path, analyzer)
 	}
 
-	// Second pass: read collapsed paths and merge
 	for i := range opens {
-		// sbomSet files must always be preserved uncollapsed to ensure
-		// reproducible vulnerability scanning results.
-		if sbomSet != nil && sbomSet.ContainsOne(opens[i].Path) {
+		// sbomSet files have to be always present in the dynamicOpens
+		if sbomSet.ContainsOne(opens[i].Path) {
 			dynamicOpens[opens[i].Path] = opens[i]
 			continue
 		}

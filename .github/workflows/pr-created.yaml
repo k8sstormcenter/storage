@@ -22,3 +22,4 @@ jobs:
       CGO_ENABLED: 0
       GO_VERSION: "1.25"
     secrets: inherit
+
