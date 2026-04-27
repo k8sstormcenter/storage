@@ -26,7 +26,7 @@ on:
 
 jobs:
   integration-tests:
-    runs-on: ubuntu-large
+    runs-on: ubuntu-latest
     permissions:
       checks: write
       pull-requests: write
@@ -146,6 +146,9 @@ jobs:
 
   failover-tests:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
