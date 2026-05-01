@@ -29,8 +29,8 @@ type CollapseConfig struct {
 // defaultCollapseConfigs carries the per-prefix thresholds we've found
 // useful in practice. These are the defaults wired into AnalyzeOpens; a
 // caller can pass a different slice via NewPathAnalyzerWithConfigs if
-// they want to tune for their workload. Unexported to prevent callers
-// from mutating the package-level slice; access via DefaultCollapseConfigs().
+// they want to tune for their workload. Unexported so callers cannot
+// mutate the package-level slice — access via DefaultCollapseConfigs().
 var defaultCollapseConfigs = []CollapseConfig{
 	{Prefix: "/etc", Threshold: 100},
 	{Prefix: "/etc/apache2", Threshold: 50}, // tuned for the webapp standard test

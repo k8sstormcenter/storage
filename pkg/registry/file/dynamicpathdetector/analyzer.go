@@ -347,17 +347,51 @@ func shallowChildrenCopy(src, dst *SegmentNode) {
 	}
 }
 
-// CompareDynamic checks whether `regularPath` is matched by `dynamicPath`,
-// where `dynamicPath` may contain DynamicIdentifier (⋯, single-segment
-// wildcard) or WildcardIdentifier (*, zero-or-more-segment wildcard).
-// The previous implementation only handled DynamicIdentifier, causing
-// explicit `/etc/*` profile entries to never match at runtime — the
-// node-agent R0002 rule (Files Access Anomalies) uses this to decide
-// whether a file access is in-profile.
+// CompareDynamic checks whether `regularPath` is matched by `dynamicPath`.
+// The dynamic path may contain DynamicIdentifier (⋯, exactly-one-segment
+// wildcard) or WildcardIdentifier (*, zero-or-more-segment mid-path /
+// one-or-more-segment trailing wildcard). The node-agent R0002 rule
+// (Files Access Anomalies) uses this at every file-open to decide whether
+// the access is in-profile.
+//
+// Anchoring contract:
+//   - Anchored patterns (start with `/`): `/etc/*` matches files UNDER
+//     /etc but NOT the bare `/etc` directory itself, mirroring shell
+//     glob semantics. This avoids R0002 silently allowing access to a
+//     profiled directory's parent.
+//   - Unanchored `*` (no leading slash): explicit catch-all that also
+//     matches the root path `/`. The only way to whitelist `/` itself
+//     is an explicit unanchored `*`.
+//
+// Trailing-slash insensitivity: `/etc/` is treated as `/etc`, and
+// `/etc/passwd/` as `/etc/passwd`. Trailing empty path components from
+// `strings.Split` are trimmed so `len(regular) > 0` correctly reflects
+// the presence of a real path tail when matching trailing `*`.
+//
+// The empty regular path (`""`) is treated as "no path" and matches
+// nothing — distinct from the root path `/`, which matches unanchored
+// `*` per the contract above.
 func CompareDynamic(dynamicPath, regularPath string) bool {
-	dynamicSegments := strings.Split(dynamicPath, "/")
-	regularSegments := strings.Split(regularPath, "/")
-	return compareSegments(dynamicSegments, regularSegments)
+	// Empty inputs match nothing. Note that splitPath("") and splitPath("/")
+	// both yield [""] after trim, so without this guard an empty profile
+	// entry would silently match the root path.
+	if dynamicPath == "" || regularPath == "" {
+		return false
+	}
+	return compareSegments(splitPath(dynamicPath), splitPath(regularPath))
+}
+
+// splitPath splits a path on `/` and trims trailing empty segments
+// produced by trailing slashes (e.g. `/etc/` -> ["", "etc"] not
+// ["", "etc", ""]). The leading empty segment from a leading slash is
+// preserved as the anchor marker. Single-element results are not
+// trimmed so the root path `/` retains its `[""]` shape.
+func splitPath(p string) []string {
+	s := strings.Split(p, "/")
+	for len(s) > 1 && s[len(s)-1] == "" {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func compareSegments(dynamic, regular []string) bool {
@@ -365,24 +399,23 @@ func compareSegments(dynamic, regular []string) bool {
 		return len(regular) == 0
 	}
 	if dynamic[0] == WildcardIdentifier {
-		// A trailing `*` matches one OR MORE remaining segments — never
-		// zero. Standard glob semantics: `/etc/*` matches files under
-		// /etc but NOT the bare /etc directory itself. Without this,
-		// R0002 would silently allow access to a profiled directory's
-		// parent, which masks tampering of the directory entry itself.
+		// Trailing `*` matches one OR MORE remaining segments — never
+		// zero. This is what makes `/etc/*` not match the bare `/etc`
+		// directory, while still matching `/etc/passwd` and any deeper
+		// path. The unanchored-`*` case (regular path is `/`, regular
+		// slice is [""]) returns true because len(regular) == 1.
 		if len(dynamic) == 1 {
 			return len(regular) > 0
 		}
-		// Try to match the rest of the dynamic pattern starting at every
-		// position in the regular tail — including i == 0 (the wildcard
-		// consumed zero segments) and every later offset (wildcard
-		// consumed i segments). No optimistic peek at dynamic[1]: that
-		// optimization used to require regular[i] to literally equal
-		// dynamic[1], which is wrong whenever dynamic[1] is itself
-		// another `*` (consecutive wildcards like `/*/*` would never
-		// recurse and thus never match — user-authored profiles can
-		// contain literal /*/* patterns even though analyzer-generated
-		// ones are squashed by collapseAdjacentDynamicIdentifiers).
+		// Mid-path `*`: zero-or-more semantics. Try every offset
+		// including i == 0 (wildcard consumed zero segments). No
+		// optimistic peek at dynamic[1]: that optimization used to
+		// require regular[i] to literally equal dynamic[1], which is
+		// wrong whenever dynamic[1] is itself another `*` (consecutive
+		// wildcards like `/*/*` would never recurse and thus never
+		// match — user-authored profiles can contain literal /*/*
+		// patterns even though analyzer-generated ones are squashed by
+		// collapseAdjacentDynamicIdentifiers).
 		for i := 0; i <= len(regular); i++ {
 			if compareSegments(dynamic[1:], regular[i:]) {
 				return true
@@ -399,27 +432,31 @@ func compareSegments(dynamic, regular []string) bool {
 	return false
 }
 
-// FindConfigForPath returns the CollapseConfig whose Prefix matches
-// `path` with the longest match, or nil if none match. Exposed so
-// callers and tests can introspect which threshold will apply to a
-// given path without walking the trie.
-func (ua *PathAnalyzer) FindConfigForPath(path string) *CollapseConfig {
-	var best *CollapseConfig
+// FindConfigForPath returns a value copy of the CollapseConfig whose
+// Prefix matches `path` with the longest match. Falls back to the
+// analyzer's default config (Prefix:"/") when no per-prefix override
+// applies, so the result is always meaningful — there is no "no match"
+// signal.
+//
+// Returning by value keeps the analyzer's internal state immutable
+// from callers. NewPathAnalyzerWithConfigs already makes a defensive
+// inbound copy of `configs`; this is its outbound twin. Without it,
+// `cfg := analyzer.FindConfigForPath(p); cfg.Threshold = 1` would
+// silently mutate the analyzer's threshold map for every future call.
+func (ua *PathAnalyzer) FindConfigForPath(path string) CollapseConfig {
+	bestIdx := -1
 	bestLen := -1
 	for i := range ua.configs {
 		cfg := &ua.configs[i]
 		if hasPrefixAtBoundary(path, cfg.Prefix) && len(cfg.Prefix) > bestLen {
-			best = cfg
+			bestIdx = i
 			bestLen = len(cfg.Prefix)
 		}
 	}
-	// Fall back to the `/` default config if no per-prefix override
-	// matched — callers expect a non-nil result when *any* threshold
-	// applies, and the default always applies.
-	if best == nil {
-		return &ua.defaultCfg
+	if bestIdx == -1 {
+		return ua.defaultCfg
 	}
-	return best
+	return ua.configs[bestIdx]
 }
 
 // CollapseAdjacentDynamicIdentifiers replaces runs of adjacent
