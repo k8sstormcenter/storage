@@ -365,9 +365,13 @@ func compareSegments(dynamic, regular []string) bool {
 		return len(regular) == 0
 	}
 	if dynamic[0] == WildcardIdentifier {
-		// A trailing `*` matches any remaining path tail (including empty).
+		// A trailing `*` matches one OR MORE remaining segments — never
+		// zero. Standard glob semantics: `/etc/*` matches files under
+		// /etc but NOT the bare /etc directory itself. Without this,
+		// R0002 would silently allow access to a profiled directory's
+		// parent, which masks tampering of the directory entry itself.
 		if len(dynamic) == 1 {
-			return true
+			return len(regular) > 0
 		}
 		// Try to match the rest of the dynamic pattern starting at every
 		// position in the regular tail — including i == 0 (the wildcard

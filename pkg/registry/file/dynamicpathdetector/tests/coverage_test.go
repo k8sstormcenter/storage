@@ -418,3 +418,63 @@ func TestCompareDynamic_WildcardRegressions(t *testing.T) {
 		})
 	}
 }
+
+// TestCompareDynamic_TrailingWildcardSemantics pins the trailing-`*`
+// boundary that was reported as a behavior regression on upstream PR #316:
+// `/etc/*` previously didn't match `/etc` (the bare directory) because the
+// pre-wildcard implementation never matched `*` at all, so R0002 still
+// fired on access to the directory itself. The first wildcard-aware
+// implementation made trailing `*` match zero-or-more segments, silently
+// allowing access to the parent. Standard glob semantics require trailing
+// `*` to consume at least one segment — mirror that.
+//
+// Mid-path wildcards (`/*/foo`, `/a/*/b`) keep zero-or-more semantics; the
+// security concern is specifically about the trailing form letting a
+// profile entry reach further up the path tree than intended.
+func TestCompareDynamic_TrailingWildcardSemantics(t *testing.T) {
+	tests := []struct {
+		name    string
+		dynamic string
+		regular string
+		want    bool
+	}{
+		{
+			name:    "trailing_star_does_not_match_bare_parent",
+			dynamic: "/etc/*",
+			regular: "/etc",
+			want:    false,
+		},
+		{
+			name:    "trailing_star_matches_one_child",
+			dynamic: "/etc/*",
+			regular: "/etc/passwd",
+			want:    true,
+		},
+		{
+			name:    "trailing_star_matches_deep_child",
+			dynamic: "/etc/*",
+			regular: "/etc/ssh/sshd_config",
+			want:    true,
+		},
+		{
+			name:    "trailing_star_at_root_does_not_match_root",
+			dynamic: "/*",
+			regular: "",
+			want:    false,
+		},
+		{
+			name:    "deep_trailing_star_does_not_match_short_path",
+			dynamic: "/var/log/*",
+			regular: "/var/log",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dynamicpathdetector.CompareDynamic(tt.dynamic, tt.regular)
+			assert.Equal(t, tt.want, got,
+				"CompareDynamic(%q, %q) = %v, want %v", tt.dynamic, tt.regular, got, tt.want)
+		})
+	}
+}
