@@ -57,8 +57,11 @@ func MatchCollapseConfiguration(label labels.Selector, field fields.Selector) st
 }
 
 // SelectableFields returns a field set that represents the object.
+// CollapseConfiguration is cluster-scoped, so the namespaceScoped flag
+// is false — `metadata.namespace` is intentionally absent from the
+// selectable set.
 func SelectableFields(obj *softwarecomposition.CollapseConfiguration) fields.Set {
-	return generic.ObjectMetaFieldsSet(&obj.ObjectMeta, true)
+	return generic.ObjectMetaFieldsSet(&obj.ObjectMeta, false)
 }
 
 // CollapseConfigurationStrategy carries the per-object lifecycle hooks the
