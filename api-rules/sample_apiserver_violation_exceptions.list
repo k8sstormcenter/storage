@@ -9,6 +9,7 @@ API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/soft
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,ApplicationProfileSpec,EphemeralContainers
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,ApplicationProfileSpec,InitContainers
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,CallStackNode,Children
+API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,CollapseConfigurationSpec,CollapseConfigs
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,ConditionedStatus,Conditions
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,ConfigurationScanSummarySpec,WorkloadConfigurationScanSummaryIdentifiers
 API rule violation: list_type_missing,github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1,ContainerProfileSpec,Architectures
