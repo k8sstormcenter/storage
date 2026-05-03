@@ -43,7 +43,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a CollapseConfiguration")
 	}
-	return cc.ObjectMeta.Labels, SelectableFields(cc), nil
+	return cc.Labels, SelectableFields(cc), nil
 }
 
 // MatchCollapseConfiguration returns a generic SelectionPredicate that pairs

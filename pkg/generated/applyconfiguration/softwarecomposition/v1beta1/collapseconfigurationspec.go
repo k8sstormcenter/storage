@@ -29,7 +29,8 @@ type CollapseConfigurationSpecApplyConfiguration struct {
 	// EndpointDynamicThreshold is the counterpart for AnalyzeEndpoints.
 	EndpointDynamicThreshold *int32 `json:"endpointDynamicThreshold,omitempty"`
 	// CollapseConfigs is the per-prefix threshold override list, evaluated
-	// longest-prefix-wins.
+	// longest-prefix-wins. Each entry is keyed by Prefix so server-side
+	// apply patches one entry at a time instead of replacing the slice.
 	CollapseConfigs []CollapseConfigEntryApplyConfiguration `json:"collapseConfigs,omitempty"`
 }
 

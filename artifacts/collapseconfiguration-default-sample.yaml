@@ -4,7 +4,7 @@
 # The resource is cluster-scoped; the singleton "default" is the only
 # name the deflate path consults.
 #
-#   kubectl apply -f collapseconfiguration-default-sample.yaml
+#   kubectl apply -f artifacts/collapseconfiguration-default-sample.yaml
 #
 apiVersion: spdx.softwarecomposition.kubescape.io/v1beta1
 kind: CollapseConfiguration

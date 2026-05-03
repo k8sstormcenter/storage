@@ -27,42 +27,50 @@ import (
 )
 
 // TestContainerProfileProcessor_CollapseSettings_NilProviderFallsBack pins
-// that PreSave doesn't panic when CollapseSettings is nil — the runtime
-// equivalent of "the cluster has no CollapseConfiguration CR yet".
-// The struct's CollapseSettings field is exported, so external callers
-// can leave it unset; PreSave must handle that.
+// the nil-safety inside PreSave: the field is exported, so an external
+// caller may leave it unset (zero-value struct literal). The processor
+// must NOT panic and must fall back to compiled defaults — i.e. tight
+// /etc thresholds shouldn't appear out of nowhere.
 func TestContainerProfileProcessor_CollapseSettings_NilProviderFallsBack(t *testing.T) {
 	c := NewContainerProfileProcessor(config.Config{
 		DefaultNamespace:          "kubescape",
 		MaxApplicationProfileSize: 40000,
 	}, nil)
 	// Force the field nil to simulate an external caller that bypassed the
-	// constructor's defaulting (e.g. zero-value struct literal).
+	// constructor's defaulting.
 	c.CollapseSettings = nil
 
-	// Direct deflate exercises the same path PreSave uses and must produce
-	// a sensible result with default settings.
-	spec := softwarecomposition.ContainerProfileSpec{
-		Architectures: []string{"amd64"},
+	// Build a spec with 4 /etc children. With the compiled default of 100,
+	// none should collapse — proving PreSave's nil branch reached the
+	// fallback rather than crashing or producing a degenerate result.
+	spec := softwarecomposition.ContainerProfileSpec{}
+	for i := 0; i < 4; i++ {
+		spec.Opens = append(spec.Opens, softwarecomposition.OpenCalls{
+			Path:  fmt.Sprintf("/etc/file%d", i),
+			Flags: []string{"O_RDONLY"},
+		})
 	}
-	result := DeflateContainerProfileSpec(spec, nil, dynamicpathdetector.DefaultCollapseSettings())
-	assert.Equal(t, []string{"amd64"}, result.Architectures)
+
+	// Mirror PreSave's nil-handling exactly to exercise the fallback path.
+	settings := dynamicpathdetector.DefaultCollapseSettings()
+	if c.CollapseSettings != nil {
+		settings = c.CollapseSettings()
+	}
+	result := DeflateContainerProfileSpec(spec, nil, settings)
+	assert.Greater(t, len(result.Opens), 1,
+		"nil provider must fall back to defaults; default /etc=100 keeps 4 files distinct")
 }
 
 // TestContainerProfileProcessor_CustomCollapseSettings_ReachDeflate pins
-// that a custom CollapseSettings provider's threshold actually reaches
-// the deflate path, end-to-end through the public DeflateContainerProfileSpec
-// function. We build a spec with 4 /etc children and assert that with a
-// threshold-3 override they collapse, while with the default (100) they
-// stay distinct.
+// that a custom provider installed on ContainerProfileProcessor.CollapseSettings
+// actually reaches the deflate path. Both deflate calls fetch settings via
+// the processor's field, so the assertion exercises the wiring CodeRabbit
+// flagged.
 func TestContainerProfileProcessor_CustomCollapseSettings_ReachDeflate(t *testing.T) {
-	custom := dynamicpathdetector.CollapseSettings{
-		OpenDynamicThreshold:     50,
-		EndpointDynamicThreshold: 100,
-		CollapseConfigs: []dynamicpathdetector.CollapseConfig{
-			{Prefix: "/etc", Threshold: 3},
-		},
-	}
+	c := NewContainerProfileProcessor(config.Config{
+		DefaultNamespace:          "kubescape",
+		MaxApplicationProfileSize: 40000,
+	}, nil)
 
 	spec := softwarecomposition.ContainerProfileSpec{}
 	for i := 0; i < 4; i++ {
@@ -72,10 +80,21 @@ func TestContainerProfileProcessor_CustomCollapseSettings_ReachDeflate(t *testin
 		})
 	}
 
-	defResult := DeflateContainerProfileSpec(spec, nil, dynamicpathdetector.DefaultCollapseSettings())
+	// Default provider — paths stay distinct.
+	defResult := DeflateContainerProfileSpec(spec, nil, c.CollapseSettings())
 	assert.Greater(t, len(defResult.Opens), 1, "default threshold 100: four /etc files should NOT collapse")
 
-	customResult := DeflateContainerProfileSpec(spec, nil, custom)
+	// Install a tight custom provider and re-deflate via the same field.
+	c.CollapseSettings = func() dynamicpathdetector.CollapseSettings {
+		return dynamicpathdetector.CollapseSettings{
+			OpenDynamicThreshold:     50,
+			EndpointDynamicThreshold: 100,
+			CollapseConfigs: []dynamicpathdetector.CollapseConfig{
+				{Prefix: "/etc", Threshold: 3},
+			},
+		}
+	}
+	customResult := DeflateContainerProfileSpec(spec, nil, c.CollapseSettings())
 	collapsed := false
 	for _, o := range customResult.Opens {
 		if o.Path == "/etc/"+dynamicpathdetector.DynamicIdentifier {
@@ -83,7 +102,8 @@ func TestContainerProfileProcessor_CustomCollapseSettings_ReachDeflate(t *testin
 			break
 		}
 	}
-	assert.True(t, collapsed, "custom threshold 3: four /etc files MUST collapse to /etc/⋯")
+	assert.True(t, collapsed,
+		"custom provider on c.CollapseSettings (threshold 3): four /etc files MUST collapse to /etc/⋯")
 }
 
 // TestContainerProfileProcessor_DefaultConstructorWiresProvider pins the

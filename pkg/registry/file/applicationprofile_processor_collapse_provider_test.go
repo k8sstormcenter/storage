@@ -57,28 +57,24 @@ func TestApplicationProfileProcessor_SetCollapseSettings_NilFallsBack(t *testing
 	// Now pass nil — must restore defaults, not crash.
 	a.SetCollapseSettings(nil)
 
-	// Exercise PreSave-time path indirectly via deflate to confirm we
-	// haven't installed nil and that we can call collapseSettings()
-	// without panicking. The simplest way is a single-container deflate
-	// with an empty Opens slice.
-	container := softwarecomposition.ApplicationProfileContainer{Name: "test"}
-	_ = deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
+	// Pull what the processor would actually pass to deflate at PreSave time.
+	// If the setter had stored nil, this call would panic.
+	got := a.collapseSettings()
+	want := dynamicpathdetector.DefaultCollapseSettings()
+	assert.Equal(t, want.OpenDynamicThreshold, got.OpenDynamicThreshold,
+		"nil provider must restore default OpenDynamicThreshold, not the prior custom 7")
+	assert.Equal(t, want.EndpointDynamicThreshold, got.EndpointDynamicThreshold)
 }
 
 // TestApplicationProfileProcessor_SetCollapseSettings_CustomProviderUsed
 // pins that a custom provider's settings actually reach the deflate
-// path. We install a provider with a deliberately tight threshold for
-// /etc (3), feed the deflate function more than 3 distinct /etc paths,
-// and assert the result collapses them — proving the custom threshold
-// won out over the compiled default of 100.
+// path *via the processor's collapseSettings field*. We deflate twice
+// against the same input — once before SetCollapseSettings (defaults,
+// no collapse) and once after (custom threshold 3, collapse). Both
+// calls fetch settings via `a.collapseSettings()`, so the assertion
+// exercises the wiring CodeRabbit flagged.
 func TestApplicationProfileProcessor_SetCollapseSettings_CustomProviderUsed(t *testing.T) {
-	custom := dynamicpathdetector.CollapseSettings{
-		OpenDynamicThreshold:     50,
-		EndpointDynamicThreshold: 100,
-		CollapseConfigs: []dynamicpathdetector.CollapseConfig{
-			{Prefix: "/etc", Threshold: 3}, // deliberately tighter than default
-		},
-	}
+	a := NewApplicationProfileProcessor(config.Config{DefaultNamespace: "kubescape", MaxApplicationProfileSize: 40000})
 
 	// Build a container whose Opens has 4 distinct /etc children.
 	container := softwarecomposition.ApplicationProfileContainer{
@@ -91,12 +87,22 @@ func TestApplicationProfileProcessor_SetCollapseSettings_CustomProviderUsed(t *t
 		},
 	}
 
-	// Default settings (threshold 100 for /etc) — paths stay distinct.
-	defResult := deflateApplicationProfileContainer(container, nil, dynamicpathdetector.DefaultCollapseSettings())
+	// Default provider (threshold 100 for /etc) — paths stay distinct.
+	// The settings come from the processor's wired-up provider.
+	defResult := deflateApplicationProfileContainer(container, nil, a.collapseSettings())
 	assert.Greater(t, len(defResult.Opens), 1, "with default /etc threshold of 100, four files should NOT collapse")
 
-	// Custom settings (threshold 3 for /etc) — paths collapse to a single dynamic node.
-	customResult := deflateApplicationProfileContainer(container, nil, custom)
+	// Now install a custom provider with a tight /etc threshold and re-deflate.
+	a.SetCollapseSettings(func() dynamicpathdetector.CollapseSettings {
+		return dynamicpathdetector.CollapseSettings{
+			OpenDynamicThreshold:     50,
+			EndpointDynamicThreshold: 100,
+			CollapseConfigs: []dynamicpathdetector.CollapseConfig{
+				{Prefix: "/etc", Threshold: 3},
+			},
+		}
+	})
+	customResult := deflateApplicationProfileContainer(container, nil, a.collapseSettings())
 	collapsed := false
 	for _, o := range customResult.Opens {
 		if o.Path == "/etc/"+dynamicpathdetector.DynamicIdentifier {
@@ -104,7 +110,8 @@ func TestApplicationProfileProcessor_SetCollapseSettings_CustomProviderUsed(t *t
 			break
 		}
 	}
-	assert.True(t, collapsed, "with custom /etc threshold of 3, four files MUST collapse to /etc/⋯")
+	assert.True(t, collapsed,
+		"after SetCollapseSettings(threshold 3), four /etc files MUST collapse to /etc/⋯ via the processor's provider")
 }
 
 // TestApplicationProfileProcessor_SetCollapseSettings_DefensiveSetterCopy

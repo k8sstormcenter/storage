@@ -80,15 +80,27 @@ func consolidateOpens(opens []types.OpenCalls, sbomSet mapset.Set[string]) []typ
 		return opens
 	}
 
-	patternIdx := map[int]bool{}
+	isPattern := make([]bool, len(opens))
+	// Sorted slice of pattern indices, longest-path-first. Order matters:
+	// when two patterns both cover the same literal, the more specific
+	// (longer) one wins so folded Flags land deterministically. With ties,
+	// the input's existing sort (alphabetical by Path) breaks them.
+	patternOrder := make([]int, 0, len(opens))
 	for i, o := range opens {
 		if strings.Contains(o.Path, WildcardIdentifier) || strings.Contains(o.Path, DynamicIdentifier) {
-			patternIdx[i] = true
+			isPattern[i] = true
+			patternOrder = append(patternOrder, i)
 		}
 	}
-	if len(patternIdx) == 0 {
+	if len(patternOrder) == 0 {
 		return opens
 	}
+	slices.SortFunc(patternOrder, func(a, b int) int {
+		if d := len(opens[b].Path) - len(opens[a].Path); d != 0 {
+			return d
+		}
+		return strings.Compare(opens[a].Path, opens[b].Path)
+	})
 
 	keep := make([]bool, len(opens))
 	for i := range opens {
@@ -96,13 +108,13 @@ func consolidateOpens(opens []types.OpenCalls, sbomSet mapset.Set[string]) []typ
 	}
 
 	for i, o := range opens {
-		if patternIdx[i] {
+		if isPattern[i] {
 			continue // patterns always survive
 		}
 		if sbomSet != nil && sbomSet.ContainsOne(o.Path) {
 			continue // SBOM paths always survive
 		}
-		for pi := range patternIdx {
+		for _, pi := range patternOrder {
 			if CompareDynamic(opens[pi].Path, o.Path) {
 				// `o` is subsumed by the pattern at pi — fold its Flags
 				// into the pattern entry so all observed access modes

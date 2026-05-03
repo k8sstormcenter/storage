@@ -17,9 +17,25 @@ limitations under the License.
 package dynamicpathdetector
 
 import (
+	"math"
+
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// clampInt32 clamps a runtime int into the int32 wire range used by the
+// CollapseConfiguration CRD. Thresholds are physically small (single- or
+// double-digit counts of trie children); clamping defends only against
+// the autotune path being handed a pathological value.
+func clampInt32(v int) int32 {
+	if v < 0 {
+		return 0
+	}
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(v)
+}
 
 // CollapseSettings is the runtime form of the CollapseConfiguration CRD —
 // a single value carrying the thresholds the deflate path needs to build
@@ -77,7 +93,7 @@ func CRDFromCollapseSettings(name string, settings CollapseSettings) *softwareco
 	for i, cfg := range settings.CollapseConfigs {
 		entries[i] = softwarecomposition.CollapseConfigEntry{
 			Prefix:    cfg.Prefix,
-			Threshold: int32(cfg.Threshold),
+			Threshold: clampInt32(cfg.Threshold),
 		}
 	}
 	return &softwarecomposition.CollapseConfiguration{
@@ -85,8 +101,8 @@ func CRDFromCollapseSettings(name string, settings CollapseSettings) *softwareco
 			Name: name,
 		},
 		Spec: softwarecomposition.CollapseConfigurationSpec{
-			OpenDynamicThreshold:     int32(settings.OpenDynamicThreshold),
-			EndpointDynamicThreshold: int32(settings.EndpointDynamicThreshold),
+			OpenDynamicThreshold:     clampInt32(settings.OpenDynamicThreshold),
+			EndpointDynamicThreshold: clampInt32(settings.EndpointDynamicThreshold),
 			CollapseConfigs:          entries,
 		},
 	}

@@ -107,7 +107,7 @@ func TestValidate_RejectsNonCC(t *testing.T) {
 func TestValidateUpdate_SameRules(t *testing.T) {
 	s := NewStrategy(newScheme())
 	old := &softwarecomposition.CollapseConfiguration{Spec: softwarecomposition.CollapseConfigurationSpec{OpenDynamicThreshold: 50}}
-	new := &softwarecomposition.CollapseConfiguration{
+	updated := &softwarecomposition.CollapseConfiguration{
 		Spec: softwarecomposition.CollapseConfigurationSpec{
 			OpenDynamicThreshold: 50,
 			CollapseConfigs: []softwarecomposition.CollapseConfigEntry{
@@ -115,7 +115,7 @@ func TestValidateUpdate_SameRules(t *testing.T) {
 			},
 		},
 	}
-	errs := s.ValidateUpdate(context.Background(), new, old)
+	errs := s.ValidateUpdate(context.Background(), updated, old)
 	if len(errs) == 0 {
 		t.Fatalf("expected ValidateUpdate to flag threshold < 1")
 	}

@@ -906,8 +906,16 @@ func schema_pkg_apis_softwarecomposition_v1beta1_CollapseConfigurationSpec(ref c
 						},
 					},
 					"collapseConfigs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"prefix",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "CollapseConfigs is the per-prefix threshold override list, evaluated longest-prefix-wins.",
+							Description: "CollapseConfigs is the per-prefix threshold override list, evaluated longest-prefix-wins. Each entry is keyed by Prefix so server-side apply patches one entry at a time instead of replacing the slice.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
