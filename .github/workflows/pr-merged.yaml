@@ -9,6 +9,10 @@ on:
       - '.github/workflows/*' ### Ignore running when files under path: .github/workflows/* changed.
   workflow_dispatch:
 
+# Default to read-only at the workflow level (least privilege per Scorecard / supply-chain hardening).
+# Jobs that need elevated scopes override below.
+permissions: read-all
+
 jobs:
   pr-merged:
     if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}

@@ -24,6 +24,10 @@ on:
         required: false
         default: ''
 
+# Default to read-only at the workflow level (least privilege per Scorecard / supply-chain hardening).
+# Jobs that need elevated scopes override below.
+permissions: read-all
+
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
