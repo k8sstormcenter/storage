@@ -40,6 +40,10 @@ on:
 # vendor/, configuration/, api-rules/, hack/.
 # Non-image files = .github/, tests/, docs/, *.md, .gitignore, Makefile, etc.
 # ---------------------------------------------------------------------------
+# Default to read-only at the workflow level (least privilege per Scorecard / supply-chain hardening).
+# Jobs that need elevated scopes override below.
+permissions: read-all
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
