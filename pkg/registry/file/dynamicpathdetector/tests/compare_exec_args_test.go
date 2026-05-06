@@ -2,6 +2,7 @@ package dynamicpathdetectortests
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
 )
@@ -170,5 +171,47 @@ func TestCompareExecArgs_RealisticPatterns(t *testing.T) {
 				t.Errorf("CompareExecArgs(%v, %v) = %v, want %v", tc.profile, tc.runtime, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestCompareExecArgs_ReDoSResistance pins that the matcher handles
+// adversarial wildcard-heavy inputs in bounded time. The classic
+// catastrophic-backtracking case is `[*, *, *, …, "literal"]` vs a
+// long literal-runtime vector that mismatches the trailing literal
+// — every prefix * has multiple split choices and the suffix
+// mismatch only surfaces at the very end, so each path gets
+// re-explored. With memoisation this is O(P*R); without it, naïve
+// recursion would be exponential.
+//
+// CodeRabbit flagged the unmemoised version on PR #27 (Major).
+func TestCompareExecArgs_ReDoSResistance(t *testing.T) {
+	// 20 leading wildcards + a literal that won't match. Without
+	// memoisation, the naïve matcher tries roughly 2^20 path splits
+	// before failing — observable as a many-second test. The
+	// memoised version completes in microseconds.
+	profile := make([]string, 0, 21)
+	for i := 0; i < 20; i++ {
+		profile = append(profile, dynamicpathdetector.WildcardIdentifier)
+	}
+	profile = append(profile, "needle-that-does-not-exist")
+
+	runtime := make([]string, 0, 50)
+	for i := 0; i < 50; i++ {
+		runtime = append(runtime, "a")
+	}
+
+	start := time.Now()
+	got := dynamicpathdetector.CompareExecArgs(profile, runtime)
+	elapsed := time.Since(start)
+
+	if got {
+		t.Errorf("expected mismatch for trailing-literal that isn't in runtime")
+	}
+	// Memoised matcher: 21 * 51 = ~1100 states, each O(R) work for
+	// the wildcard split → total bound ~50K ops. Generous budget of
+	// 100ms catches any regression to the unmemoised form (which
+	// would be measured in seconds, not milliseconds, on this input).
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("matcher took %v on adversarial input — memoisation regression?", elapsed)
 	}
 }

@@ -20,10 +20,15 @@ package dynamicpathdetector
 // no args" can write Args: []string{} in their profile and the empty
 // runtime vector still matches by virtue of the wildcard semantics.
 //
-// Implementation is recursive backtracking. Argument vectors in real
-// profiles are short (typically ≤ a dozen entries) and contain at most a
-// handful of wildcards, so the worst case stays well below the cost of a
-// regex compile.
+// Implementation is index-based recursive backtracking with memoisation
+// on (profileIndex, runtimeIndex) state pairs. The naive backtracking
+// form would degrade to exponential time on adversarial inputs like
+// `[*, *, *, …, x]` against a long literal vector — every prefix `*`
+// has multiple split choices and the suffix mismatch only surfaces
+// at the very end, so each path gets re-explored. Memoisation bounds
+// the work at O(len(profile) * len(runtime)) — i.e. quadratic in the
+// vector lengths, the standard wildcard-match complexity. CodeRabbit
+// flagged this as a Major on PR #27.
 func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 	// Outer-level empty profile = "no argv constraint" — wildcard match.
 	// The inner matcher keeps strict empty-empty semantics so anchoring
@@ -32,37 +37,59 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 	if len(profileArgs) == 0 {
 		return true
 	}
-	return matchExecArgs(profileArgs, runtimeArgs)
-}
 
-// matchExecArgs is the strict recursive matcher. Both sides must consume
-// fully for a match; this is what gives the function its anchored shape.
-// Callers that want "no argv constraint" semantics on empty profile go
-// through CompareExecArgs, which short-circuits before this is reached.
-func matchExecArgs(profileArgs, runtimeArgs []string) bool {
-	if len(profileArgs) == 0 {
-		return len(runtimeArgs) == 0
-	}
+	// State key for memoisation: (pi, ri) is the suffix-matching position
+	// in profile and runtime vectors respectively. Because both sides only
+	// shrink (we never re-enter a prefix), there are at most
+	// (len(profile)+1) * (len(runtime)+1) reachable states.
+	type state struct{ pi, ri int }
+	memo := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
+	seen := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
 
-	head := profileArgs[0]
-
-	if head == WildcardIdentifier {
-		// Try absorbing 0..len(runtimeArgs) of the runtime into this *,
-		// then match the remaining profile against the remaining runtime.
-		for k := 0; k <= len(runtimeArgs); k++ {
-			if matchExecArgs(profileArgs[1:], runtimeArgs[k:]) {
-				return true
-			}
+	var match func(pi, ri int) bool
+	match = func(pi, ri int) bool {
+		s := state{pi: pi, ri: ri}
+		if seen[s] {
+			return memo[s]
 		}
+		seen[s] = true
+
+		// Profile fully consumed → runtime must also be fully consumed
+		// (anchored match).
+		if pi == len(profileArgs) {
+			memo[s] = ri == len(runtimeArgs)
+			return memo[s]
+		}
+
+		head := profileArgs[pi]
+
+		if head == WildcardIdentifier {
+			// Try absorbing 0..(remaining runtime) into this *,
+			// then match the rest. First successful split wins.
+			for k := ri; k <= len(runtimeArgs); k++ {
+				if match(pi+1, k) {
+					memo[s] = true
+					return true
+				}
+			}
+			memo[s] = false
+			return false
+		}
+
+		// Non-wildcard head needs a runtime argument to consume.
+		if ri == len(runtimeArgs) {
+			memo[s] = false
+			return false
+		}
+
+		if head == DynamicIdentifier || head == runtimeArgs[ri] {
+			memo[s] = match(pi+1, ri+1)
+			return memo[s]
+		}
+
+		memo[s] = false
 		return false
 	}
 
-	if len(runtimeArgs) == 0 {
-		return false
-	}
-
-	if head == DynamicIdentifier || head == runtimeArgs[0] {
-		return matchExecArgs(profileArgs[1:], runtimeArgs[1:])
-	}
-	return false
+	return match(0, 0)
 }
