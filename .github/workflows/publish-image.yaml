@@ -18,7 +18,7 @@ jobs:
       packages: write
       contents: write
       pull-requests: read
-    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-merged.yaml@main
+    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-merged.yaml@e66ff8b85fb5db1392eeda655094109ee5e2a8da # v1.0.176
     with:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/storage
       IMAGE_TAG: v0.0.${{ github.run_number }}
