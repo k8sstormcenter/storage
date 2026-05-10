@@ -16,6 +16,7 @@ import (
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/k8s-interface/instanceidhandler/v1/helpers"
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
+	"github.com/kubescape/storage/pkg/registry/file/networkmatch"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/common"
 	"github.com/kubescape/storage/pkg/utils"
 )
@@ -104,7 +105,54 @@ func (NetworkNeighborhoodStrategy) Validate(_ context.Context, obj runtime.Objec
 		allErrors = append(allErrors, err)
 	}
 
+	allErrors = append(allErrors, validateNetworkProfileEntries(&ap.Spec)...)
+
 	return allErrors
+}
+
+// validateNetworkProfileEntries walks every NetworkNeighbor in the spec and
+// validates each IPAddresses[] and DNSNames[] entry against the v0.0.2
+// wildcard token grammar (spec §5.7, §5.8).
+//
+// This is the admission-time defence; runtime matchers also tolerate
+// malformed entries so a misconfigured profile doesn't kill the
+// detection path entirely.
+func validateNetworkProfileEntries(spec *softwarecomposition.NetworkNeighborhoodSpec) field.ErrorList {
+	var errs field.ErrorList
+	specPath := field.NewPath("spec")
+	for groupName, group := range map[string][]softwarecomposition.NetworkNeighborhoodContainer{
+		"containers":          spec.Containers,
+		"initContainers":      spec.InitContainers,
+		"ephemeralContainers": spec.EphemeralContainers,
+	} {
+		groupPath := specPath.Child(groupName)
+		for ci, c := range group {
+			containerPath := groupPath.Index(ci)
+			errs = append(errs, validateNeighborList(containerPath.Child("egress"), c.Egress)...)
+			errs = append(errs, validateNeighborList(containerPath.Child("ingress"), c.Ingress)...)
+		}
+	}
+	return errs
+}
+
+func validateNeighborList(parent *field.Path, list []softwarecomposition.NetworkNeighbor) field.ErrorList {
+	var errs field.ErrorList
+	for ni, n := range list {
+		nPath := parent.Index(ni)
+		ipsPath := nPath.Child("ipAddresses")
+		for ei, e := range n.IPAddresses {
+			if err := networkmatch.ValidateIPEntry(e); err != nil {
+				errs = append(errs, field.Invalid(ipsPath.Index(ei), e, err.Error()))
+			}
+		}
+		dnsPath := nPath.Child("dnsNames")
+		for ei, e := range n.DNSNames {
+			if err := networkmatch.ValidateDNSEntry(e); err != nil {
+				errs = append(errs, field.Invalid(dnsPath.Index(ei), e, err.Error()))
+			}
+		}
+	}
+	return errs
 }
 
 // WarningsOnCreate returns warnings for the creation of the given object.

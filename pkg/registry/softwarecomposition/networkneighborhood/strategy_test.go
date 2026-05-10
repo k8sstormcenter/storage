@@ -344,3 +344,74 @@ func TestPrepareForUpdateFullObj(t *testing.T) {
 		})
 	}
 }
+
+// TestValidate_NetworkProfileEntries pins the v0.0.2 admission contract:
+// malformed IPAddresses[] / DNSNames[] entries cause Validate to return
+// field errors that the apiserver translates into a 400 to the client.
+//
+// Runtime matchers tolerate malformed entries (silently skip), but
+// admission rejects them so the next person reviewing the profile sees
+// a clean document — and so the user gets fast feedback at write time.
+func TestValidate_NetworkProfileEntries(t *testing.T) {
+	makeNN := func(neighbor softwarecomposition.NetworkNeighbor) *softwarecomposition.NetworkNeighborhood {
+		return &softwarecomposition.NetworkNeighborhood{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "test-nn",
+				Namespace:   "default",
+				Annotations: map[string]string{helpers.CompletionMetadataKey: "complete", helpers.StatusMetadataKey: "ready"},
+			},
+			Spec: softwarecomposition.NetworkNeighborhoodSpec{
+				Containers: []softwarecomposition.NetworkNeighborhoodContainer{
+					{Name: "c", Egress: []softwarecomposition.NetworkNeighbor{neighbor}},
+				},
+			},
+		}
+	}
+
+	cases := []struct {
+		name       string
+		neighbor   softwarecomposition.NetworkNeighbor
+		wantErrors int
+	}{
+		{
+			name:       "all valid IPs and DNSNames",
+			neighbor:   softwarecomposition.NetworkNeighbor{IPAddresses: []string{"10.0.0.0/8", "*", "1.2.3.4"}, DNSNames: []string{"*.example.com.", "api.partner.io."}},
+			wantErrors: 0,
+		},
+		{
+			name:       "single malformed IP",
+			neighbor:   softwarecomposition.NetworkNeighbor{IPAddresses: []string{"not-an-ip"}},
+			wantErrors: 1,
+		},
+		{
+			name:       "single malformed CIDR",
+			neighbor:   softwarecomposition.NetworkNeighbor{IPAddresses: []string{"10.0.0.0/40"}},
+			wantErrors: 1,
+		},
+		{
+			name:       "recursive DNS wildcard rejected",
+			neighbor:   softwarecomposition.NetworkNeighbor{DNSNames: []string{"**"}},
+			wantErrors: 1,
+		},
+		{
+			name:       "mid-position bare star rejected (must use ⋯)",
+			neighbor:   softwarecomposition.NetworkNeighbor{DNSNames: []string{"foo.*.bar."}},
+			wantErrors: 1,
+		},
+		{
+			name:       "mixed: some good, some bad",
+			neighbor:   softwarecomposition.NetworkNeighbor{IPAddresses: []string{"10.1.2.3", "garbage", "192.168.0.0/16"}, DNSNames: []string{"api.example.com.", "**", "*.example.com."}},
+			wantErrors: 2,
+		},
+	}
+
+	s := NetworkNeighborhoodStrategy{}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := s.Validate(context.TODO(), makeNN(tc.neighbor))
+			if len(errs) != tc.wantErrors {
+				t.Errorf("Validate returned %d errors, want %d. errs: %v", len(errs), tc.wantErrors, errs)
+			}
+		})
+	}
+}
