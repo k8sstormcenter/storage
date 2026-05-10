@@ -93,3 +93,60 @@ func BenchmarkCompiledIPMatcher_LongMixedList(b *testing.B) {
 		_ = m.Match("1.1.1.1")
 	}
 }
+
+// DNS matcher benchmarks. Targets (CI runner reference):
+//   DNS literal     : < 300 ns/op
+//   DNS wildcard    : < 600 ns/op
+
+func BenchmarkMatchDNS_Literal(b *testing.B) {
+	profile := []string{"api.stripe.com."}
+	for i := 0; i < b.N; i++ {
+		_ = MatchDNS(profile, "api.stripe.com.")
+	}
+}
+
+func BenchmarkMatchDNS_LeadingWildcard(b *testing.B) {
+	profile := []string{"*.stripe.com."}
+	for i := 0; i < b.N; i++ {
+		_ = MatchDNS(profile, "webhooks.stripe.com.")
+	}
+}
+
+func BenchmarkCompiledDNSMatcher_Literal(b *testing.B) {
+	m := CompileDNS([]string{"api.stripe.com."})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = m.Match("api.stripe.com.")
+	}
+}
+
+func BenchmarkCompiledDNSMatcher_LeadingWildcard(b *testing.B) {
+	m := CompileDNS([]string{"*.stripe.com."})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = m.Match("webhooks.stripe.com.")
+	}
+}
+
+func BenchmarkCompiledDNSMatcher_DeepName(b *testing.B) {
+	// 10-label observed name against a leading-* pattern (will miss).
+	m := CompileDNS([]string{"*.stripe.com."})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = m.Match("a.b.c.d.e.f.g.h.stripe.com.")
+	}
+}
+
+func BenchmarkCompiledDNSMatcher_LongMixedList(b *testing.B) {
+	m := CompileDNS([]string{
+		"api.stripe.com.",
+		"*.stripe.com.",
+		"api.partner.io.",
+		"kubernetes.⋯.svc.cluster.local.",
+		"internal.*",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = m.Match("kubernetes.production.svc.cluster.local.")
+	}
+}
