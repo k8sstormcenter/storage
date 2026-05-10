@@ -59,8 +59,14 @@ func TestNetworkNeighbor_IPAddresses_EmptyOmitted(t *testing.T) {
 		Identifier: "id",
 		Type:       "external",
 	}
-	a, _ := withField.Marshal()
-	b, _ := withoutField.Marshal()
+	a, err := withField.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal(withField): %v", err)
+	}
+	b, err := withoutField.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal(withoutField): %v", err)
+	}
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("nil IPAddresses must encode identically to absent field;\n  got %d bytes vs %d bytes",
 			len(a), len(b))

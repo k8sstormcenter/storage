@@ -5,7 +5,7 @@ Wildcard-aware matchers for the `NetworkNeighbor.IPAddresses` and
 `nn.was_address_in_{egress,ingress}` and `nn.is_domain_in_{egress,ingress}`.
 
 This package is the runtime counterpart to the spec sections §5.7 (IP)
-and §5.8 (DNS) at <https://billofbehavior.fusioncore.ai/bob/docs/drafts/spec-v0.0.1/>.
+and §5.8 (DNS) at <https://billofbehavior.fusioncore.ai/bob/docs/drafts/spec-v0.0.2/>.
 
 ## Wildcard token vocabulary
 
@@ -41,8 +41,9 @@ func MatchIP(profileEntries []string, observedIP string) bool
 // MatchDNS reports whether observedName matches any of the profile entries.
 // Each entry MAY use the wildcard tokens above.
 //
-// Both profile entries and observedName are normalised to FQDN form
-// (trailing dot appended if missing) before comparison.
+// Both profile entries and observedName are normalised before
+// comparison: a trailing dot is stripped if present, and labels are
+// lowercased for case-insensitive equality.
 func MatchDNS(profileEntries []string, observedName string) bool
 ```
 

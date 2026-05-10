@@ -145,6 +145,13 @@ func validateNeighborList(parent *field.Path, list []softwarecomposition.Network
 				errs = append(errs, field.Invalid(ipsPath.Index(ei), e, err.Error()))
 			}
 		}
+		// Deprecated singular IPAddress is still accepted; validate it too
+		// so malformed values can't slip past admission via the old form.
+		if n.IPAddress != "" {
+			if err := networkmatch.ValidateIPEntry(n.IPAddress); err != nil {
+				errs = append(errs, field.Invalid(nPath.Child("ipAddress"), n.IPAddress, err.Error()))
+			}
+		}
 		dnsPath := nPath.Child("dnsNames")
 		for ei, e := range n.DNSNames {
 			if err := networkmatch.ValidateDNSEntry(e); err != nil {
@@ -183,6 +190,8 @@ func (NetworkNeighborhoodStrategy) ValidateUpdate(_ context.Context, obj, _ runt
 	if err := utils.ValidateStatusAnnotation(ap.Annotations); err != nil {
 		allErrors = append(allErrors, err)
 	}
+
+	allErrors = append(allErrors, validateNetworkProfileEntries(&ap.Spec)...)
 
 	return allErrors
 }
