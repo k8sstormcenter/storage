@@ -415,6 +415,11 @@ func TestValidate_NetworkProfileEntries(t *testing.T) {
 			neighbor:  softwarecomposition.NetworkNeighbor{IPAddress: "not-an-ip"},
 			wantPaths: []string{"spec.containers[0].egress[0].ipAddress"},
 		},
+		{
+			name:      "deprecated singular DNS malformed is also rejected",
+			neighbor:  softwarecomposition.NetworkNeighbor{DNS: "**"},
+			wantPaths: []string{"spec.containers[0].egress[0].dns"},
+		},
 	}
 
 	s := NetworkNeighborhoodStrategy{}

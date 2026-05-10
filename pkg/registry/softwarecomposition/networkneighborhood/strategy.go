@@ -166,6 +166,13 @@ func validateNeighborList(parent *field.Path, list []softwarecomposition.Network
 				errs = append(errs, field.Invalid(dnsPath.Index(ei), e, err.Error()))
 			}
 		}
+		// Deprecated singular DNS is still accepted; validate it too,
+		// mirroring the IPAddress pattern above.
+		if n.DNS != "" {
+			if err := networkmatch.ValidateDNSEntry(n.DNS); err != nil {
+				errs = append(errs, field.Invalid(nPath.Child("dns"), n.DNS, err.Error()))
+			}
+		}
 	}
 	return errs
 }
