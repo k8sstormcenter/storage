@@ -473,7 +473,25 @@ func TestValidateUpdate_NetworkProfileEntries(t *testing.T) {
 	}
 	s := NetworkNeighborhoodStrategy{}
 	errs := s.ValidateUpdate(context.TODO(), bad, bad)
+	wantPaths := map[string]int{
+		"spec.containers[0].egress[0].ipAddresses[0]": 1,
+		"spec.containers[0].egress[0].dnsNames[0]":    1,
+	}
 	if len(errs) != 2 {
 		t.Fatalf("ValidateUpdate returned %d errors, want 2. errs: %v", len(errs), errs)
+	}
+	gotSet := map[string]int{}
+	for _, e := range errs {
+		gotSet[e.Field]++
+	}
+	for p, n := range wantPaths {
+		if gotSet[p] != n {
+			t.Errorf("expected %d errors at path %q, got %d (all: %v)", n, p, gotSet[p], errs)
+		}
+	}
+	for p := range gotSet {
+		if _, ok := wantPaths[p]; !ok {
+			t.Errorf("unexpected error at path %q (all: %v)", p, errs)
+		}
 	}
 }

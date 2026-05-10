@@ -120,13 +120,21 @@ func (NetworkNeighborhoodStrategy) Validate(_ context.Context, obj runtime.Objec
 func validateNetworkProfileEntries(spec *softwarecomposition.NetworkNeighborhoodSpec) field.ErrorList {
 	var errs field.ErrorList
 	specPath := field.NewPath("spec")
-	for groupName, group := range map[string][]softwarecomposition.NetworkNeighborhoodContainer{
-		"containers":          spec.Containers,
-		"initContainers":      spec.InitContainers,
-		"ephemeralContainers": spec.EphemeralContainers,
-	} {
-		groupPath := specPath.Child(groupName)
-		for ci, c := range group {
+	// Ordered slice rather than a map: Go map iteration is non-deterministic,
+	// and admission errors flow back to clients via the apiserver. Stable
+	// ordering keeps error messages reproducible across requests and across
+	// test runs.
+	groups := []struct {
+		name  string
+		items []softwarecomposition.NetworkNeighborhoodContainer
+	}{
+		{name: "containers", items: spec.Containers},
+		{name: "initContainers", items: spec.InitContainers},
+		{name: "ephemeralContainers", items: spec.EphemeralContainers},
+	}
+	for _, g := range groups {
+		groupPath := specPath.Child(g.name)
+		for ci, c := range g.items {
 			containerPath := groupPath.Index(ci)
 			errs = append(errs, validateNeighborList(containerPath.Child("egress"), c.Egress)...)
 			errs = append(errs, validateNeighborList(containerPath.Child("ingress"), c.Ingress)...)
