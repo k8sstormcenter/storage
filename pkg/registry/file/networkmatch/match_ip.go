@@ -14,7 +14,7 @@ const AnyIPSentinel = "*"
 // profile and reuse it across every observed event for that profile.
 type IPMatcher struct {
 	any      bool        // any AnyIPSentinel ("*") entry → match anything
-	literals []net.IP    // already-parsed literal IPs (IPv4-canonicalised by net.ParseIP)
+	literals []net.IP    // already-parsed literal IPs (IPv4-canonicalized by net.ParseIP)
 	cidrs    []*net.IPNet // pre-compiled CIDRs
 }
 

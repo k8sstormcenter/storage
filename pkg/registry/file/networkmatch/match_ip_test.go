@@ -90,7 +90,7 @@ func TestMatchIP_AnyAsCIDR(t *testing.T) {
 	if MatchIP([]string{"0.0.0.0/0"}, "2001:db8::1") {
 		t.Error("0.0.0.0/0 must NOT match IPv6 — distinct address family")
 	}
-	// ::/0 alone does NOT cover IPv4 (Go's net.IPNet behaviour confirms this).
+	// ::/0 alone does NOT cover IPv4 (Go's net.IPNet behavior confirms this).
 	if MatchIP([]string{"::/0"}, "1.2.3.4") {
 		t.Error("::/0 must NOT match IPv4 — distinct address family")
 	}

@@ -14,7 +14,7 @@ that package's `coverage_test.go` for the contract.
 
 | Token | IP semantics | DNS semantics |
 |---|---|---|
-| Literal | byte-equality after canonicalisation (net.IP) | byte-equality after trailing-dot normalisation |
+| Literal | byte-equality after canonicalization (net.IP) | byte-equality after trailing-dot normalization |
 | CIDR (`a.b.c.d/n`) | `net.IPNet.Contains(observed)` | — |
 | `*` as full entry | sugar for `0.0.0.0/0` ∪ `::/0` (any IP) | — |
 | `*.<suffix>` (leading) | — | RFC 4592 — exactly one DNS label before `<suffix>` |
@@ -41,7 +41,7 @@ func MatchIP(profileEntries []string, observedIP string) bool
 // MatchDNS reports whether observedName matches any of the profile entries.
 // Each entry MAY use the wildcard tokens above.
 //
-// Both profile entries and observedName are normalised before
+// Both profile entries and observedName are normalized before
 // comparison: a trailing dot is stripped if present, and labels are
 // lowercased for case-insensitive equality.
 func MatchDNS(profileEntries []string, observedName string) bool

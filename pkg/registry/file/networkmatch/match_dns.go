@@ -68,7 +68,7 @@ func MatchDNS(profileEntries []string, observed string) bool {
 	return CompileDNS(profileEntries).Match(observed)
 }
 
-// splitDNS canonicalises a DNS name (lowercases, strips trailing dot)
+// splitDNS canonicalizes a DNS name (lowercases, strips trailing dot)
 // and splits on "." into labels. Returns (labels, valid).
 // An empty inner label (e.g. "foo..bar") returns valid=false.
 func splitDNS(name string) ([]string, bool) {
