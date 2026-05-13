@@ -82,6 +82,43 @@ func TestCleanupTask(t *testing.T) {
 	assert.Equal(t, expectedFilesToDelete, filesDeleted)
 }
 
+func TestDeleteByTemplateHashOrWlidStandalonePod(t *testing.T) {
+	t.Run("deletes pod scoped profile when pod is gone", func(t *testing.T) {
+		metadata := &metav1.ObjectMeta{
+			Labels: map[string]string{
+				helpersv1.RelatedKindMetadataKey: "Pod",
+			},
+			Annotations: map[string]string{
+				helpersv1.WlidMetadataKey: "wlid://cluster-kind-kind/namespace-default/pod-airbyte-worker",
+			},
+		}
+		resourceMaps := ResourceMaps{
+			RunningTemplateHash:          mapset.NewSet[string](),
+			RunningWlidsToContainerNames: new(maps.SafeMap[string, mapset.Set[string]]),
+		}
+
+		assert.True(t, deleteByTemplateHashOrWlid("", "", metadata, resourceMaps))
+	})
+
+	t.Run("keeps pod scoped profile while pod is running", func(t *testing.T) {
+		metadata := &metav1.ObjectMeta{
+			Labels: map[string]string{
+				helpersv1.RelatedKindMetadataKey: "Pod",
+			},
+			Annotations: map[string]string{
+				helpersv1.WlidMetadataKey: "wlid://cluster-kind-kind/namespace-default/pod-airbyte-worker",
+			},
+		}
+		resourceMaps := ResourceMaps{
+			RunningTemplateHash:          mapset.NewSet[string](),
+			RunningWlidsToContainerNames: new(maps.SafeMap[string, mapset.Set[string]]),
+		}
+		resourceMaps.RunningWlidsToContainerNames.Set("namespace-default/pod-airbyte-worker", mapset.NewSet[string]("main"))
+
+		assert.False(t, deleteByTemplateHashOrWlid("", "", metadata, resourceMaps))
+	})
+}
+
 type ResourcesFetchMock struct {
 }
 
