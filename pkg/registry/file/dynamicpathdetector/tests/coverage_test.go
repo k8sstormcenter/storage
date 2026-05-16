@@ -21,7 +21,7 @@ func configThreshold(prefix string) int {
 			return cfg.Threshold
 		}
 	}
-	return dynamicpathdetector.DefaultCollapseConfig.Threshold
+	return dynamicpathdetector.DefaultCollapseConfig().Threshold
 }
 
 func TestNewPathAnalyzerWithConfigs(t *testing.T) {
@@ -570,6 +570,25 @@ func TestCompareDynamic_MidPathStarZeroOrMore(t *testing.T) {
 				"CompareDynamic(%q, %q) = %v, want %v", tt.dynamic, tt.regular, got, tt.want)
 		})
 	}
+}
+
+// TestDefaultCollapseConfig_DefensiveCopy pins the same contract for
+// the singular DefaultCollapseConfig() accessor that previously lived
+// as an exported mutable var. CodeRabbit upstream PR #323 finding #3.
+// Any caller mutating the returned struct must not affect package state.
+func TestDefaultCollapseConfig_DefensiveCopy(t *testing.T) {
+	first := dynamicpathdetector.DefaultCollapseConfig()
+	original := first.Threshold
+
+	// Mutate the returned struct.
+	first.Threshold = 999_999
+	first.Prefix = "/poisoned"
+
+	second := dynamicpathdetector.DefaultCollapseConfig()
+	assert.Equal(t, original, second.Threshold,
+		"mutating the first call's struct must not change package state Threshold")
+	assert.NotEqual(t, "/poisoned", second.Prefix,
+		"mutating the first call's struct must not change package state Prefix")
 }
 
 // TestDefaultCollapseConfigs_DefensiveCopy pins the contract that the
