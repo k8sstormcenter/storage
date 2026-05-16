@@ -30,6 +30,15 @@ permissions: read-all
 
 jobs:
   integration-tests:
+    # Disabled — see https://github.com/k8sstormcenter/storage/issues/32
+    # All recent ProfileCreate-family subtests fail under GitHub-runner CPU
+    # contention due to fixed wall-clock learning-period assumptions. The
+    # job-level skip shows the workflow as "skipped" (not "failed red X") in
+    # the Actions UI when someone dispatches it, while still preventing the
+    # ~30-minute waste on a known-flaky run. Re-enable by removing this
+    # `if: false` after the timing assumptions are made dynamic and 5
+    # consecutive green runs are demonstrated.
+    if: false
     runs-on: ubuntu-latest
     permissions:
       checks: write

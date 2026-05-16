@@ -3801,6 +3801,7 @@ func autoConvert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(
 	out.PodSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.PodSelector))
 	out.NamespaceSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.IPAddress = in.IPAddress
+	out.IPAddresses = *(*[]string)(unsafe.Pointer(&in.IPAddresses))
 	return nil
 }
 
@@ -3818,6 +3819,7 @@ func autoConvert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(
 	out.PodSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.PodSelector))
 	out.NamespaceSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.IPAddress = in.IPAddress
+	out.IPAddresses = *(*[]string)(unsafe.Pointer(&in.IPAddresses))
 	return nil
 }
 
