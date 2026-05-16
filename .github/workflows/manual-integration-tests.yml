@@ -35,6 +35,14 @@ jobs:
       checks: write
       pull-requests: write
     steps:
+      - name: Disabled — see issue #32
+        run: |
+          echo "::error::Manual Integration Tests are disabled — see https://github.com/k8sstormcenter/storage/issues/32"
+          echo "All recent ProfileCreate-family subtests fail under GitHub-runner CPU contention due to"
+          echo "fixed wall-clock learning-period assumptions. Re-enable only after the timing assumptions"
+          echo "are made dynamic and 5 consecutive green runs are demonstrated."
+          exit 1
+
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
