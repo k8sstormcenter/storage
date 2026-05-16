@@ -78,6 +78,16 @@ func (ua *PathAnalyzer) effectiveThreshold(pathPrefix string) int {
 // which means an explicit catch-all override could not actually override
 // the analyzer's default threshold.
 func hasPrefixAtBoundary(pathPrefix, prefix string) bool {
+	// Empty-prefix guard. CodeRabbit upstream PR #323 finding #10:
+	// without this, hasPrefixAtBoundary("/foo", "") falls through to
+	// pathPrefix[0] == '/', which is true for any absolute path —
+	// effectively treating `""` as a root-matching prefix. None of the
+	// shipped configs use an empty prefix, but operators could supply
+	// one via CollapseConfiguration CR, and an explicit guard makes
+	// the invariant load-bearing rather than incidental.
+	if prefix == "" {
+		return true
+	}
 	if len(pathPrefix) < len(prefix) {
 		return false
 	}
