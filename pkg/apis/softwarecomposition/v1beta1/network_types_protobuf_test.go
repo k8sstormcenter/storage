@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+
 // TestNetworkNeighbor_IPAddresses_ProtobufRoundtrip pins the v0.0.2
 // protobuf wire contract for the new IPAddresses field. Storage persists
 // NetworkNeighborhood objects to etcd via this protobuf encoding; if
@@ -87,6 +88,25 @@ func TestNetworkNeighbor_IPAddresses_EmptyOmitted(t *testing.T) {
 // correctly — but the .proto file must declare it for the documentation
 // surface to match the wire surface.
 func TestNetworkNeighbor_ProtoFile_DeclaresIPAddresses(t *testing.T) {
+	// First half of the contract: verify the Go struct tag actually
+	// declares field 9 / wire type 2 / repeated. Tag drift on the Go
+	// side would silently make any roundtrip use a different wire
+	// number — the .proto-text scan below would still pass because
+	// nothing connects the two halves yet. CodeRabbit upstream PR #33
+	// follow-up review: pin both sides of the schema/tag alignment.
+	sf, ok := reflect.TypeOf(NetworkNeighbor{}).FieldByName("IPAddresses")
+	if !ok {
+		t.Fatal("NetworkNeighbor.IPAddresses field not found")
+	}
+	goTag := sf.Tag.Get("protobuf")
+	if !strings.Contains(goTag, "bytes,9,rep,name=ipAddresses") {
+		t.Fatalf("unexpected protobuf tag for NetworkNeighbor.IPAddresses: %q "+
+			"(want substring bytes,9,rep,name=ipAddresses)", goTag)
+	}
+
+	// Second half: the .proto file must declare the matching field on
+	// the NetworkNeighbor message. Without this, regeneration drops the
+	// field for downstream non-Go consumers.
 	proto, err := os.ReadFile("generated.proto")
 	if err != nil {
 		t.Fatalf("read generated.proto: %v", err)

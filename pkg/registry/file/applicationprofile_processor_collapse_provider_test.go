@@ -165,13 +165,17 @@ func TestApplicationProfileProcessor_ZeroValue_NoPanicOnCollapseSettings(t *test
 	// Direct struct literal — collapseSettings is left as the zero value (nil).
 	a := &ApplicationProfileProcessor{}
 
-	// The safe accessor must NOT panic. The result should match the
-	// compiled-in defaults (the documented fallback).
+	// The safe accessor must NOT panic. The result must match the
+	// compiled-in defaults across ALL fields, not just OpenDynamicThreshold —
+	// otherwise a regression that resets EndpointDynamicThreshold (or any
+	// future field added to CollapseSettings) to its zero value would
+	// silently pass this guard. CodeRabbit follow-up review on storage PR #33.
 	require.NotPanics(t, func() {
 		got := a.effectiveCollapseSettings()
-		assert.Equal(t, dynamicpathdetector.DefaultCollapseSettings().OpenDynamicThreshold,
-			got.OpenDynamicThreshold,
-			"zero-valued processor must fall back to DefaultCollapseSettings, got %+v", got)
+		want := dynamicpathdetector.DefaultCollapseSettings()
+		assert.Equal(t, want, got,
+			"zero-valued processor must fall back to the FULL DefaultCollapseSettings struct, got %+v want %+v",
+			got, want)
 	})
 
 	// Direct field-call still panics — that's an "I know what I'm doing"
