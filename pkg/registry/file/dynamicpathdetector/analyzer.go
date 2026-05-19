@@ -88,6 +88,19 @@ func hasPrefixAtBoundary(pathPrefix, prefix string) bool {
 	if prefix == "" {
 		return true
 	}
+	// Normalise operator-supplied trailing slashes. A CollapseConfig with
+	// `Prefix:"/etc/"` semantically means the same as `Prefix:"/etc"` —
+	// the slash is the implicit segment boundary. Without this, an
+	// operator authoring `/etc/` via CollapseConfiguration CR would
+	// silently never match (the byte-equality check rejects `/etc/foo`
+	// because `/etc/foo[:5]` = `/etc/` only when prefix is `/etc/`, which
+	// then forces the next char to be at offset 5 — but offset 5 IS the
+	// boundary slash itself; the boundary check expects another `/`
+	// AFTER that, which is `f`, not `/` → false). Matthias upstream
+	// PR #323 follow-up.
+	for len(prefix) > 1 && prefix[len(prefix)-1] == '/' {
+		prefix = prefix[:len(prefix)-1]
+	}
 	if len(pathPrefix) < len(prefix) {
 		return false
 	}
@@ -388,21 +401,117 @@ func CompareDynamic(dynamicPath, regularPath string) bool {
 	if dynamicPath == "" || regularPath == "" {
 		return false
 	}
-	dynamic := splitPath(dynamicPath)
-	regular := splitPath(regularPath)
-	// Fast path: the recursive form is already O(n) for dynamic patterns
-	// with at most one `*`. Memoisation only earns its keep when the
-	// pattern has TWO OR MORE `*` segments — that's the multi-wildcard
-	// shape that triggers 2^n / n!-style re-entry. For the common
-	// single-`*` / no-`*` shapes the memo-map allocation is pure
-	// overhead, so we keep them on the lean recursive path.
-	// Upstream PR #326 rabbit finding #4 + the adversarial coverage in
-	// compare_dynamic_memoise_test.go drive this split.
-	if multipleWildcards(dynamic) {
+	// Dispatch by `*` count:
+	//
+	//   0 or 1 `*`  → zero-alloc index-based segment walk (compareSegmentsIndex).
+	//                 This is the hot R0002 / file-open path; on `main` it
+	//                 measured ~16 ns/op, 0 allocs/op. The previous splitPath +
+	//                 slice-based descent moved it to ~85 ns/op, 128 B/op,
+	//                 2 allocs/op — reverted here.
+	//   2+ `*`      → splitPath + DP-memoised core. The memo absorbs the
+	//                 exponential re-entry of multi-`*` patterns, which the
+	//                 index-based walk would still hit. Allocation cost is
+	//                 acceptable because multi-`*` patterns are rare and
+	//                 author-supplied, not on the per-event hot path.
+	//
+	// Matthias's upstream PR #323 perf review drove this split.
+	if countStarSegments(dynamicPath) >= 2 {
+		dynamic := splitPath(dynamicPath)
+		regular := splitPath(regularPath)
 		memo := make(map[[2]int]bool, len(dynamic)*len(regular))
 		return compareSegmentsMemo(dynamic, regular, 0, 0, memo)
 	}
-	return compareSegments(dynamic, regular)
+	return compareSegmentsIndex(dynamicPath, 0, regularPath, 0)
+}
+
+// countStarSegments counts the number of standalone `*` segments in a
+// path. A `*` segment is a single `*` byte bounded by `/` or string-edge
+// — distinct from literal `*` characters embedded inside other tokens
+// (which v0.0.1 does not currently distinguish but may via `\*` escaping
+// in v0.0.2 per spec §5.1).
+//
+// Zero-allocation: scans the string in place.
+func countStarSegments(p string) int {
+	count := 0
+	for i := 0; i < len(p); i++ {
+		if p[i] != '*' {
+			continue
+		}
+		leftOK := i == 0 || p[i-1] == '/'
+		rightOK := i+1 == len(p) || p[i+1] == '/'
+		if leftOK && rightOK {
+			count++
+		}
+	}
+	return count
+}
+
+// segAt returns the segment of `s` starting at byte offset `pos`,
+// together with the byte index immediately after the segment's trailing
+// `/` (or len(s) if the segment is the last one).
+//
+// Zero-allocation: returns a slice into the source string.
+func segAt(s string, pos int) (seg string, nextPos int) {
+	start := pos
+	for pos < len(s) && s[pos] != '/' {
+		pos++
+	}
+	seg = s[start:pos]
+	if pos < len(s) {
+		// skip trailing `/`
+		return seg, pos + 1
+	}
+	return seg, pos
+}
+
+// compareSegmentsIndex is the zero-allocation core. It implements the
+// same recursive-descent contract as the slice-based compareSegments
+// but walks the source strings via byte indices, never splitting.
+//
+// di / ri are byte offsets into dynamicPath / regularPath respectively.
+//
+// Per the precondition in CompareDynamic, the dynamic path contains
+// AT MOST one `*` segment. The function therefore never re-enters with
+// a stale `*` position — backtracking depth is bounded by the number
+// of segments in the regular path on the unique mid-`*` shape.
+func compareSegmentsIndex(dynamicPath string, di int, regularPath string, ri int) bool {
+	dl, rl := len(dynamicPath), len(regularPath)
+	if di >= dl {
+		return ri >= rl
+	}
+	dSeg, dNext := segAt(dynamicPath, di)
+	if dSeg == WildcardIdentifier {
+		// Trailing `*` matches one OR MORE remaining segments — never
+		// zero. This is what makes `/etc/*` not match the bare `/etc`
+		// directory, while still matching `/etc/passwd` and deeper.
+		if dNext >= dl {
+			return ri < rl
+		}
+		// Mid-path `*`: zero-or-more semantics. Try every offset
+		// including ri itself (wildcard consumed zero segments).
+		for rTry := ri; rTry <= rl; {
+			if compareSegmentsIndex(dynamicPath, dNext, regularPath, rTry) {
+				return true
+			}
+			// Advance rTry past one segment + its trailing `/`.
+			for rTry < rl && regularPath[rTry] != '/' {
+				rTry++
+			}
+			if rTry >= rl {
+				return false
+			}
+			rTry++ // skip `/`
+		}
+		return false
+	}
+	if ri >= rl {
+		return false
+	}
+	rSeg, rNext := segAt(regularPath, ri)
+	if dSeg == DynamicIdentifier || dSeg == rSeg {
+		return compareSegmentsIndex(dynamicPath, dNext, regularPath, rNext)
+	}
+	return false
 }
 
 // multipleWildcards reports whether the dynamic-segment slice contains
