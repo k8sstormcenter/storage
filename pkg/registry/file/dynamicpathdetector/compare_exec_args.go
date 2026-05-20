@@ -31,17 +31,113 @@ package dynamicpathdetector
 // flagged this as a Major on PR #27.
 func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 	// Outer-level empty profile = "no argv constraint" — wildcard match.
-	// The inner matcher keeps strict empty-empty semantics so anchoring
-	// during recursion (`profile fully consumed but runtime has more`)
-	// remains a mismatch.
 	if len(profileArgs) == 0 {
 		return true
 	}
+	// Dispatch by `*` count.
+	//
+	//   0 or 1 `*`  → linear forward / split-anchored walk
+	//                 (compareExecArgsLinear). Zero allocations: no map,
+	//                 no closure, no recursion. R0040 fires on every
+	//                 execve event in clusters running the args-aware
+	//                 rule; the previous code allocated 2 maps + a
+	//                 closure per call (~912 B / 6 allocs on literal
+	//                 args; up to ~6.5 KB on multi-`*` shapes).
+	//
+	//   2+ `*`      → memoised recursive backtracker
+	//                 (compareExecArgsMemo). The memo absorbs the
+	//                 exponential re-entry of multi-`*` patterns
+	//                 (CodeRabbit upstream PR #27 finding). Allocation
+	//                 cost is acceptable here because multi-`*`
+	//                 patterns are author-supplied and rare on the
+	//                 per-event hot path.
+	//
+	// Matthias's upstream PR #323 perf review on CompareDynamic
+	// motivates the analogous split here.
+	if hasMultipleStarsArgs(profileArgs) {
+		return compareExecArgsMemo(profileArgs, runtimeArgs)
+	}
+	return compareExecArgsLinear(profileArgs, runtimeArgs)
+}
 
-	// State key for memoisation: (pi, ri) is the suffix-matching position
-	// in profile and runtime vectors respectively. Because both sides only
-	// shrink (we never re-enter a prefix), there are at most
-	// (len(profile)+1) * (len(runtime)+1) reachable states.
+// hasMultipleStarsArgs reports whether the profile argv contains two or
+// more WildcardIdentifier tokens. Zero-allocation scan.
+func hasMultipleStarsArgs(profileArgs []string) bool {
+	n := 0
+	for _, a := range profileArgs {
+		if a == WildcardIdentifier {
+			n++
+			if n >= 2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// compareExecArgsLinear is the zero-allocation core for 0 or 1 `*`
+// argv patterns. Caller MUST have verified hasMultipleStarsArgs is
+// false. Semantics are identical to compareExecArgsMemo.
+//
+// For 0 `*`: position-by-position with `⋯` (DynamicIdentifier) matching
+// any single token; lengths must agree exactly (anchored at both ends).
+//
+// For 1 `*`: prefix segments (left of `*`) match runtime prefix; suffix
+// segments (right of `*`) match runtime suffix; `*` absorbs the middle.
+// Mid `*` admits zero or more runtime args, trailing `*` admits zero or
+// more remaining args (still anchored — every runtime arg consumed by
+// either a literal, a `⋯`, or the `*`-run).
+func compareExecArgsLinear(p, r []string) bool {
+	// Locate the `*` segment, if any.
+	starIdx := -1
+	for i, a := range p {
+		if a == WildcardIdentifier {
+			starIdx = i
+			break
+		}
+	}
+	if starIdx < 0 {
+		// 0 `*` — anchored position-by-position match.
+		if len(p) != len(r) {
+			return false
+		}
+		for i := range p {
+			if p[i] != DynamicIdentifier && p[i] != r[i] {
+				return false
+			}
+		}
+		return true
+	}
+	// 1 `*` — split prefix / suffix at the `*` index.
+	prefixLen := starIdx
+	suffixLen := len(p) - starIdx - 1
+	if len(r) < prefixLen+suffixLen {
+		return false
+	}
+	// Prefix walks forward from runtime[0].
+	for i := 0; i < prefixLen; i++ {
+		if p[i] != DynamicIdentifier && p[i] != r[i] {
+			return false
+		}
+	}
+	// Suffix walks forward from runtime[len(r)-suffixLen:].
+	rSuffixStart := len(r) - suffixLen
+	for i := 0; i < suffixLen; i++ {
+		pSeg := p[starIdx+1+i]
+		if pSeg != DynamicIdentifier && pSeg != r[rSuffixStart+i] {
+			return false
+		}
+	}
+	return true
+}
+
+// compareExecArgsMemo is the memoised recursive backtracker, reached
+// only when the profile argv has 2+ `*` tokens. The memo bounds work
+// at O(len(profile) * len(runtime)) on adversarial inputs like
+// `[*, *, *, …, sentinel]` against a long literal vector — every
+// prefix `*` has multiple split choices and the suffix mismatch only
+// surfaces at the very end. CodeRabbit upstream PR #27 finding.
+func compareExecArgsMemo(profileArgs, runtimeArgs []string) bool {
 	type state struct{ pi, ri int }
 	memo := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
 	seen := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
@@ -54,8 +150,6 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 		}
 		seen[s] = true
 
-		// Profile fully consumed → runtime must also be fully consumed
-		// (anchored match).
 		if pi == len(profileArgs) {
 			memo[s] = ri == len(runtimeArgs)
 			return memo[s]
@@ -64,8 +158,6 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 		head := profileArgs[pi]
 
 		if head == WildcardIdentifier {
-			// Try absorbing 0..(remaining runtime) into this *,
-			// then match the rest. First successful split wins.
 			for k := ri; k <= len(runtimeArgs); k++ {
 				if match(pi+1, k) {
 					memo[s] = true
@@ -76,7 +168,6 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 			return false
 		}
 
-		// Non-wildcard head needs a runtime argument to consume.
 		if ri == len(runtimeArgs) {
 			memo[s] = false
 			return false
