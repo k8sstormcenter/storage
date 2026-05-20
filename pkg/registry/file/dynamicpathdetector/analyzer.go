@@ -416,12 +416,111 @@ func CompareDynamic(dynamicPath, regularPath string) bool {
 	//
 	// Matthias's upstream PR #323 perf review drove this split.
 	if countStarSegments(dynamicPath) >= 2 {
-		dynamic := splitPath(dynamicPath)
-		regular := splitPath(regularPath)
-		memo := make(map[[2]int]bool, len(dynamic)*len(regular))
-		return compareSegmentsMemo(dynamic, regular, 0, 0, memo)
+		// Multiple `*` segments: try collapsing consecutive runs first.
+		// Spec §5.1 makes adjacent `*`s redundant (mid `*` is 0+
+		// idempotent; trailing `*` is preserved by the run's last
+		// element). After collapse, a 2+-`*` pattern like `/a/*/*/b`
+		// reduces to a single-`*` `/a/*/b` and falls into the
+		// zero-allocation linear path. Only TRULY non-adjacent
+		// multi-`*` patterns (e.g. `/a/*/b/*/c`) still take the memo
+		// path. The collapse is only invoked on the slow path; the
+		// 0/1-`*` hot path pays no overhead.
+		dynamicPath = collapseConsecutiveStars(dynamicPath)
+		if countStarSegments(dynamicPath) >= 2 {
+			dynamic := splitPath(dynamicPath)
+			regular := splitPath(regularPath)
+			memo := make(map[[2]int]bool, len(dynamic)*len(regular))
+			return compareSegmentsMemo(dynamic, regular, 0, 0, memo)
+		}
 	}
 	return compareSegmentsIndex(dynamicPath, 0, regularPath, 0)
+}
+
+// collapseConsecutiveStars replaces runs of consecutive `*` segments
+// with a single `*`. `/a/*/*/b` → `/a/*/b`, `/*/*/*/x` → `/*/x`, etc.
+//
+// Semantic equivalence under v0.0.1 spec §5.1:
+//
+//   - Mid `*` matches 0+ segments; collapsing N consecutive mid `*`s
+//     into one preserves the 0+ arity.
+//   - Trailing `*` matches 1+ segments. A run of consecutive `*`s
+//     ending in a trailing position still requires 1+ from the run's
+//     last element; the upstream mid `*`s each contribute 0+. Net: 1+.
+//   - Therefore `/x/*/*/* ` (trailing run) ≡ `/x/*` (single trailing `*`)
+//     and `/x/*/*/y` (mid run) ≡ `/x/*/y` (single mid `*`).
+//
+// Two-pass implementation:
+//
+//  1. Zero-allocation scan for `/*/*` with a segment-boundary check on
+//     the trailing `*`. If absent (the common case), return p as-is.
+//  2. Build the collapsed string via strings.Builder (one allocation).
+//
+// The hot path — patterns with no adjacent `*` — pays only Pass 1's
+// scan cost (~few ns) and no allocation.
+//
+// Producers' linter SHOULD flag adjacent `*` and have authors collapse
+// in source. This matcher-side collapse is the safety net for legacy
+// or hand-authored profiles.
+func collapseConsecutiveStars(p string) string {
+	// Pass 1: detect any "/*/*" with the second `*` actually a `*` segment.
+	needsCollapse := false
+	for i := 0; i+3 < len(p); i++ {
+		if p[i] != '/' || p[i+1] != '*' || p[i+2] != '/' || p[i+3] != '*' {
+			continue
+		}
+		// p[i+3] is `*`. It's a `*` SEGMENT iff p[i+4] is `/` or string-end.
+		if i+4 == len(p) || p[i+4] == '/' {
+			needsCollapse = true
+			break
+		}
+	}
+	if !needsCollapse {
+		return p
+	}
+
+	// Pass 2: build collapsed string. We walk segments and drop any `*`
+	// segment whose immediate predecessor was also `*`.
+	var b strings.Builder
+	b.Grow(len(p))
+	// Track whether we just emitted a `*` segment, so we know to drop
+	// subsequent `*` segments AND their preceding separator slash.
+	prevSegWasStar := false
+	// Track the position we're about to write a `/` from (so we can
+	// drop it if the next segment turns out to be a collapsed `*`).
+	pendingSlash := false
+	i := 0
+	for i < len(p) {
+		// Emit any pending separator if the next byte starts a segment.
+		// We DON'T emit a `/` if we're about to drop a `*` segment.
+		if p[i] == '/' {
+			pendingSlash = true
+			i++
+			continue
+		}
+		segStart := i
+		for i < len(p) && p[i] != '/' {
+			i++
+		}
+		seg := p[segStart:i]
+		isStar := seg == "*"
+		if isStar && prevSegWasStar {
+			// Skip this `*` AND its leading slash (pendingSlash) —
+			// they're absorbed by the previous `*`.
+			pendingSlash = false
+			continue
+		}
+		if pendingSlash {
+			b.WriteByte('/')
+			pendingSlash = false
+		}
+		b.WriteString(seg)
+		prevSegWasStar = isStar
+	}
+	// Trailing slash, if any (the path ended in `/`).
+	if pendingSlash {
+		b.WriteByte('/')
+	}
+	return b.String()
 }
 
 // countStarSegments counts the number of standalone `*` segments in a
