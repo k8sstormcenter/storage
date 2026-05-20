@@ -167,9 +167,28 @@ jobs:
         run: |
           IMAGE_TAG="${{ needs.detect-changes.outputs.image_tag }}"
           STORAGE_REF="${GITHUB_SHA}"
+          BRANCH="${{ github.ref_name }}"
+          NA_REPO="${{ github.repository_owner }}/node-agent"
+
+          # Skip cross-repo trigger when the matching node-agent branch
+          # doesn't exist. This is the normal case for release-chain
+          # branches like `release/v0.0.240/tier-N-*` — they pair with
+          # an independently-named NA branch (`release/v0.3.26/tier-N-*`)
+          # whose own CT workflow handles the NA build with the right
+          # STORAGE_REF. Previously this step force-dispatched against
+          # a non-existent NA branch and failed the whole storage build
+          # with a misleading HTTP 422 — even though `build-and-push-image`
+          # succeeded. Observed on runs 26121167565 (tier-1) and
+          # 26152224053 (tier-2).
+          if ! gh api "repos/${NA_REPO}/branches/${BRANCH}" >/dev/null 2>&1; then
+            echo "No matching node-agent branch '${BRANCH}' on ${NA_REPO} — skipping auto-trigger."
+            echo "(Release-chain branches pair via a separate CT workflow that builds NA directly.)"
+            exit 0
+          fi
+
           echo "Triggering node-agent build with IMAGE_TAG=${IMAGE_TAG} STORAGE_REF=${STORAGE_REF} (commit)"
           gh workflow run build.yaml \
-            --repo "${{ github.repository_owner }}/node-agent" \
-            --ref "${{ github.ref_name }}" \
+            --repo "${NA_REPO}" \
+            --ref "${BRANCH}" \
             -f IMAGE_TAG="${IMAGE_TAG}" \
             -f STORAGE_REF="${STORAGE_REF}"
