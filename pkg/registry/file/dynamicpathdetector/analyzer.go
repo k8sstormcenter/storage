@@ -514,27 +514,11 @@ func compareSegmentsIndex(dynamicPath string, di int, regularPath string, ri int
 	return false
 }
 
-// multipleWildcards reports whether the dynamic-segment slice contains
-// more than one `*` segment. Single-`*` patterns can't backtrack
-// re-entrantly (the only `*` consumes monotonically from the same
-// starting point), so they're safe to keep on the non-memoised path.
-func multipleWildcards(dynamic []string) bool {
-	count := 0
-	for _, s := range dynamic {
-		if s == WildcardIdentifier {
-			count++
-			if count > 1 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // compareSegmentsMemo is the DP-memoised core, reached only when the
 // dynamic pattern has two or more `*` segments. It walks (di, ri) cursor
 // pairs over the dynamic and regular slices. The semantics are identical
-// to compareSegments: only the redundant re-entry is eliminated.
+// to the index-based compareSegmentsIndex: only the redundant re-entry
+// is eliminated.
 //
 // Per-state outcomes are cached in memo. On a cache hit the prior
 // boolean is returned directly; on a miss the recursive expansion runs
@@ -587,44 +571,6 @@ func splitPath(p string) []string {
 		s = s[:len(s)-1]
 	}
 	return s
-}
-
-func compareSegments(dynamic, regular []string) bool {
-	if len(dynamic) == 0 {
-		return len(regular) == 0
-	}
-	if dynamic[0] == WildcardIdentifier {
-		// Trailing `*` matches one OR MORE remaining segments — never
-		// zero. This is what makes `/etc/*` not match the bare `/etc`
-		// directory, while still matching `/etc/passwd` and any deeper
-		// path. The unanchored-`*` case (regular path is `/`, regular
-		// slice is [""]) returns true because len(regular) == 1.
-		if len(dynamic) == 1 {
-			return len(regular) > 0
-		}
-		// Mid-path `*`: zero-or-more semantics. Try every offset
-		// including i == 0 (wildcard consumed zero segments). No
-		// optimistic peek at dynamic[1]: that optimization used to
-		// require regular[i] to literally equal dynamic[1], which is
-		// wrong whenever dynamic[1] is itself another `*` (consecutive
-		// wildcards like `/*/*` would never recurse and thus never
-		// match — user-authored profiles can contain literal /*/*
-		// patterns even though analyzer-generated ones are squashed by
-		// collapseAdjacentDynamicIdentifiers).
-		for i := 0; i <= len(regular); i++ {
-			if compareSegments(dynamic[1:], regular[i:]) {
-				return true
-			}
-		}
-		return false
-	}
-	if len(regular) == 0 {
-		return false
-	}
-	if dynamic[0] == DynamicIdentifier || dynamic[0] == regular[0] {
-		return compareSegments(dynamic[1:], regular[1:])
-	}
-	return false
 }
 
 // FindConfigForPath returns a value copy of the CollapseConfig whose
