@@ -12,12 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CodeRabbit upstream PR #326 finding #4 (Major) — analyzer.go:419-433:
-//
-//   "Memoize `*` backtracking in `compareSegments` to avoid exponential
-//    blowups. The recursive expansion at Line 419 explores all suffix
-//    splits without caching, which can become exponential for
-//    multi-wildcard patterns in a hot runtime path matcher."
+// Memoisation contract for `*` backtracking in the segment matcher: the
+// recursive expansion explores all suffix splits, and without caching that
+// becomes exponential for multi-wildcard patterns on the hot runtime path.
 //
 // This file pins the contract end-to-end:
 //
@@ -35,8 +32,8 @@ import (
 //      not timing-flaky on slow runners — un-memoised compareSegments
 //      times out by ~3 orders of magnitude on these inputs.
 //
-// Skipped under `testing.Short()` per the rabbit-flagged
-// CI-flakiness mitigation pattern (compare_exec_args_test.go:313).
+// Skipped under `testing.Short()` per the CI-flakiness mitigation
+// pattern (compare_exec_args_test.go:313).
 
 // adversarialMultiWildcardInputs builds dynamic patterns shaped to
 // trigger the worst-case backtracking in the un-memoised matcher: a
@@ -149,8 +146,8 @@ func TestCompareDynamic_MemoiseGoldenAcceptance(t *testing.T) {
 	}
 }
 
-// TestCompareDynamic_MemoiseAdversarialReDoS pins the rabbit-flagged
-// upper bound. The dynamic pattern has many `*` segments and a literal
+// TestCompareDynamic_MemoiseAdversarialReDoS pins the wall-clock upper
+// bound. The dynamic pattern has many `*` segments and a literal
 // tail; the regular path has many segments and a non-matching tail.
 // Un-memoised compareSegments explores every (di, ri) state pair via
 // re-entry, which is 2^n / n! style runtime. With memoisation, every
@@ -194,7 +191,7 @@ func TestCompareDynamic_MemoiseAdversarialReDoS(t *testing.T) {
 			// Performance ceiling.
 			require.LessOrEqualf(t, elapsed.Nanoseconds(), tc.budget.Nanoseconds(),
 				"CompareDynamic took %v on adversarial input (stars=%d depth=%d); budget was %v — "+
-					"un-memoised exponential matcher detected (rabbit PR #326 finding #4)",
+					"un-memoised exponential matcher detected",
 				elapsed, tc.stars, tc.regularDepth, tc.budget)
 		})
 	}
@@ -230,7 +227,7 @@ func TestCompareDynamic_MemoiseAdversarialPositive(t *testing.T) {
 	require.True(t, got,
 		"CompareDynamic should accept %q against %q (matching tail)", dynamic, regular)
 	require.LessOrEqualf(t, elapsed.Nanoseconds(), (200 * time.Millisecond).Nanoseconds(),
-		"positive-case adversarial took %v; budget 200ms — memoisation regressed (rabbit #4)",
+		"positive-case adversarial took %v; budget 200ms — memoisation regressed",
 		elapsed)
 }
 
@@ -280,6 +277,52 @@ func TestCompareDynamic_MemoiseAllocCeiling(t *testing.T) {
 			require.LessOrEqualf(t, perCall, 12.0,
 				"%s: per-call allocs = %.2f, expected ≤ 12 — memoisation introduced unbounded heap growth",
 				tc.name, perCall)
+		})
+	}
+}
+
+// TestCompareDynamic_ZeroAllocHotPath pins the hot-path perf contract:
+// the 0-or-1 `*` shapes — including the R0002 hot path
+// (`/etc/*` vs `/etc/ssh/sshd_config`) — MUST execute with zero
+// allocations. The pre-PR splitPath dispatch made every call allocate
+// 2 slices (~112 B); the index-based compareSegmentsIndex path restored
+// the upstream zero-alloc target.
+//
+// This pins the contract structurally — any future refactor that
+// re-introduces splitPath on the 0/1-`*` path fails this test.
+func TestCompareDynamic_ZeroAllocHotPath(t *testing.T) {
+	cases := []struct {
+		name, dyn, reg string
+	}{
+		// 0-`*` shapes
+		{"literal_exact_match", "/etc/resolv.conf", "/etc/resolv.conf"},
+		{"literal_mismatch", "/etc/resolv.conf", "/etc/passwd"},
+		{"ellipsis_match", "/api/⋯/users", "/api/v1/users"},
+		// 1-`*` shapes — the R0002 hot path
+		{"trailing_star_match", "/etc/*", "/etc/ssh/sshd_config"},
+		{"trailing_star_no_match_on_parent", "/etc/*", "/etc"},
+		{"mid_star_zero", "/a/*/b", "/a/b"},
+		{"mid_star_many", "/a/*/b", "/a/x/y/z/b"},
+		{"unanchored_star", "*", "/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Warm-up to absorb any one-off setup cost.
+			for i := 0; i < 100; i++ {
+				_ = dynamicpathdetector.CompareDynamic(tc.dyn, tc.reg)
+			}
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			const iters = 10_000
+			for i := 0; i < iters; i++ {
+				_ = dynamicpathdetector.CompareDynamic(tc.dyn, tc.reg)
+			}
+			runtime.ReadMemStats(&after)
+			allocs := after.Mallocs - before.Mallocs
+			require.Equalf(t, uint64(0), allocs,
+				"%s: %d allocs across %d iters — 0/1-`*` shapes MUST be zero-allocation",
+				tc.name, allocs, iters)
 		})
 	}
 }

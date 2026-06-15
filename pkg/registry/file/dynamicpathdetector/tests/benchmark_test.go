@@ -73,8 +73,8 @@ func BenchmarkAnalyzeOpensVsDeflateStringer(b *testing.B) {
 }
 
 // BenchmarkCompareDynamic exercises the matcher under realistic shapes.
-// Run with -benchmem; the goal is the zero-alloc target Matthias called
-// out on upstream PR #316. Until the perf rewrite lands the numbers
+// Run with -benchmem; the goal is the zero-alloc target for the hot path.
+// Until the perf rewrite lands the numbers
 // document the current cost so regressions show up. Inputs are split
 // across cases so the benchmark covers:
 //
@@ -99,6 +99,14 @@ func BenchmarkCompareDynamic(b *testing.B) {
 		{"unanchored_star_root", "*", "/"},
 		{"deep_literal_match", "/var/log/syslog", "/var/log/syslog"},
 		{"deep_literal_mismatch", "/var/log/syslog", "/var/log/messages"},
+		// Consecutive `*` runs \u2014 pre-collapse experiment.
+		// These shapes used to hit the memoised path (2+ `*` segments)
+		// and allocate ~6.5 KB per call. With collapse_consecutive_stars
+		// at matcher entry they should fold to a single `*` and run
+		// through the zero-alloc linear path.
+		{"consec_two_stars_mid", "/a/*/*/b", "/a/x/y/b"},
+		{"consec_four_stars_trail", "/a/*/*/*/*", "/a/b/c/d/e"},
+		{"consec_redos_adversarial", "/*/*/*/*/sentinel", "/a/b/c/d/e/f/g/h/sentinel"},
 	}
 	for _, c := range cases {
 		b.Run(c.name, func(b *testing.B) {
@@ -106,6 +114,46 @@ func BenchmarkCompareDynamic(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				_ = dynamicpathdetector.CompareDynamic(c.dynamic, c.regular)
+			}
+		})
+	}
+}
+
+// BenchmarkMatchExecArgs exercises the R0040 exec-arg matcher hot path
+// (MatchExecArgs -> matchExecArgsStrict -> argMatches). argsRequired=false is
+// the no-constraint fast path that never compares; the rest run anchored strict
+// matching. matchExecArgsStrict memoises backtracking on (profileIndex,
+// runtimeIndex) and allocates two maps per call once a real comparison is
+// needed, so -benchmem documents that cost and pins it against regression.
+// Shapes mirror the argv vectors R0040 sees in practice (sh -c, flags, embedded
+// dynamic config paths) plus an adversarial leading-star case that would
+// backtrack exponentially without the memo.
+func BenchmarkMatchExecArgs(b *testing.B) {
+	star := dynamicpathdetector.WildcardIdentifier
+	ellipsis := dynamicpathdetector.DynamicIdentifier
+	cases := []struct {
+		name         string
+		profile      []string
+		argsRequired bool
+		runtime      []string
+	}{
+		{"no_constraint_fast_path", nil, false, []string{"-c", "echo hi"}},
+		{"literal_match", []string{"-c", "echo hi"}, true, []string{"-c", "echo hi"}},
+		{"literal_mismatch", []string{"-c", "echo hi"}, true, []string{"-c", "rm -rf /"}},
+		{"literal_length_mismatch", []string{"-c"}, true, []string{"-c", "echo hi"}},
+		{"single_ellipsis_mid", []string{"-c", ellipsis}, true, []string{"-c", "echo hi"}},
+		{"trailing_star_many_consumed", []string{"-c", star}, true, []string{"-c", "echo", "hi", "there"}},
+		{"trailing_star_zero_consumed", []string{"-c", star}, true, []string{"-c"}},
+		{"embedded_dynamic_path_arg", []string{"--config", "/etc/" + ellipsis + "/app.conf"}, true, []string{"--config", "/etc/myapp/app.conf"}},
+		{"long_literal_vector", []string{"-a", "-b", "-c", "-d", "-e", "-f"}, true, []string{"-a", "-b", "-c", "-d", "-e", "-f"}},
+		{"memo_stress_leading_stars", []string{star, star, star, "sentinel"}, true, []string{"a", "b", "c", "d", "e", "f", "sentinel"}},
+	}
+	for _, c := range cases {
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = dynamicpathdetector.MatchExecArgs(c.profile, c.argsRequired, c.runtime)
 			}
 		})
 	}

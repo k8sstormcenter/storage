@@ -1,47 +1,51 @@
 package dynamicpathdetector
 
-// CompareExecArgs reports whether a runtime exec argument vector matches a
-// profile argument vector. The profile vector may contain two wildcard
-// tokens:
+import "strings"
+
+// MatchExecArgs reports whether runtimeArgs satisfies a profile entry's argv
+// contract. argsRequired carries the entry's ExecCalls.ArgsRequired flag:
 //
-//	DynamicIdentifier  ("⋯") — matches exactly one argument position.
-//	WildcardIdentifier ("*") — matches zero or more consecutive arguments.
+//	false → no constraint; matches any runtimeArgs.
+//	true  → strict anchored match against profileArgs (empty profileArgs
+//	        matches only an empty runtimeArgs).
 //
-// Anything else is a literal-equality match. The match is anchored at both
-// ends: every runtime argument must be consumed by the profile vector,
-// either by a literal, a DynamicIdentifier, or absorbed into a
-// WildcardIdentifier run.
+// The flag exists because v1beta1.ExecCalls.Args is `json:",omitempty"`: an
+// explicit `args: []` round-trips back as nil, so the stored vector alone
+// cannot distinguish "no constraint" from "must have no args".
+func MatchExecArgs(profileArgs []string, argsRequired bool, runtimeArgs []string) bool {
+	if !argsRequired {
+		return true
+	}
+	return matchExecArgsStrict(profileArgs, runtimeArgs)
+}
+
+// CompareExecArgs reports whether runtimeArgs matches profileArgs, treating an
+// empty profileArgs as "no constraint" (matches anything). Non-empty vectors
+// are matched anchored at both ends by matchExecArgsStrict.
 //
-// Empty profileArgs is treated as "no argv constraint" — i.e. matches any
-// runtime arg vector. This keeps path-only Execs entries (the common case
-// in user-defined ApplicationProfiles, which omit the Args field) from
-// silently triggering R0040 just because the rule started consulting
-// was_executed_with_args. A user that wants to assert "this exec must have
-// no args" can write Args: []string{} in their profile and the empty
-// runtime vector still matches by virtue of the wildcard semantics.
-//
-// Implementation is index-based recursive backtracking with memoisation
-// on (profileIndex, runtimeIndex) state pairs. The naive backtracking
-// form would degrade to exponential time on adversarial inputs like
-// `[*, *, *, …, x]` against a long literal vector — every prefix `*`
-// has multiple split choices and the suffix mismatch only surfaces
-// at the very end, so each path gets re-explored. Memoisation bounds
-// the work at O(len(profile) * len(runtime)) — i.e. quadratic in the
-// vector lengths, the standard wildcard-match complexity. CodeRabbit
-// flagged this as a Major on PR #27.
+// Use MatchExecArgs to express "argv must be empty"; CompareExecArgs is kept
+// for callers that have not migrated to the ArgsRequired-aware API.
 func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
-	// Outer-level empty profile = "no argv constraint" — wildcard match.
-	// The inner matcher keeps strict empty-empty semantics so anchoring
-	// during recursion (`profile fully consumed but runtime has more`)
-	// remains a mismatch.
 	if len(profileArgs) == 0 {
 		return true
 	}
+	return matchExecArgsStrict(profileArgs, runtimeArgs)
+}
 
-	// State key for memoisation: (pi, ri) is the suffix-matching position
-	// in profile and runtime vectors respectively. Because both sides only
-	// shrink (we never re-enter a prefix), there are at most
-	// (len(profile)+1) * (len(runtime)+1) reachable states.
+// matchExecArgsStrict matches profileArgs against runtimeArgs position by
+// position, anchored at both ends. An empty profileArgs matches only an empty
+// runtimeArgs. Tokens are matched by argMatches, except a bare
+// WildcardIdentifier ("*"), which absorbs zero or more consecutive runtime
+// args.
+//
+// Index-based backtracking memoised on (profileIndex, runtimeIndex): without
+// the memo, patterns like [*, *, …, x] against a long literal vector backtrack
+// exponentially; the memo bounds it at O(len(profile)*len(runtime)).
+func matchExecArgsStrict(profileArgs, runtimeArgs []string) bool {
+	if len(profileArgs) == 0 {
+		return len(runtimeArgs) == 0
+	}
+
 	type state struct{ pi, ri int }
 	memo := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
 	seen := make(map[state]bool, (len(profileArgs)+1)*(len(runtimeArgs)+1))
@@ -54,8 +58,6 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 		}
 		seen[s] = true
 
-		// Profile fully consumed → runtime must also be fully consumed
-		// (anchored match).
 		if pi == len(profileArgs) {
 			memo[s] = ri == len(runtimeArgs)
 			return memo[s]
@@ -64,8 +66,7 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 		head := profileArgs[pi]
 
 		if head == WildcardIdentifier {
-			// Try absorbing 0..(remaining runtime) into this *,
-			// then match the rest. First successful split wins.
+			// Absorb 0..remaining runtime args; first successful split wins.
 			for k := ri; k <= len(runtimeArgs); k++ {
 				if match(pi+1, k) {
 					memo[s] = true
@@ -76,13 +77,12 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 			return false
 		}
 
-		// Non-wildcard head needs a runtime argument to consume.
 		if ri == len(runtimeArgs) {
 			memo[s] = false
 			return false
 		}
 
-		if head == DynamicIdentifier || head == runtimeArgs[ri] {
+		if argMatches(head, runtimeArgs[ri]) {
 			memo[s] = match(pi+1, ri+1)
 			return memo[s]
 		}
@@ -92,4 +92,24 @@ func CompareExecArgs(profileArgs, runtimeArgs []string) bool {
 	}
 
 	return match(0, 0)
+}
+
+// argMatches matches one profile token against one runtime arg:
+//
+//	bare "⋯"                  — any single arg.
+//	token containing "⋯"/"*"  — a dynamic path; matched segment-wise by
+//	                            CompareDynamic ("⋯" = one segment, "*" = zero+).
+//	anything else             — literal equality.
+//
+// A bare "*" never reaches here — matchExecArgsStrict consumes it as a
+// positional wildcard first — so any "*" seen is embedded in a path token (the
+// form the analyzer emits when it collapses adjacent dynamic segments).
+func argMatches(profileArg, runtimeArg string) bool {
+	if profileArg == DynamicIdentifier {
+		return true
+	}
+	if strings.Contains(profileArg, DynamicIdentifier) || strings.Contains(profileArg, WildcardIdentifier) {
+		return CompareDynamic(profileArg, runtimeArg)
+	}
+	return profileArg == runtimeArg
 }

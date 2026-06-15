@@ -2107,6 +2107,14 @@ func (m *ExecCalls) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	i--
+	if m.ArgsRequired {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x20
 	if len(m.Envs) > 0 {
 		for iNdEx := len(m.Envs) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Envs[iNdEx])
@@ -9646,6 +9654,7 @@ func (m *ExecCalls) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
+	n += 2
 	return n
 }
 
@@ -12756,6 +12765,7 @@ func (this *ExecCalls) String() string {
 		`Path:` + fmt.Sprintf("%v", this.Path) + `,`,
 		`Args:` + fmt.Sprintf("%v", this.Args) + `,`,
 		`Envs:` + fmt.Sprintf("%v", this.Envs) + `,`,
+		`ArgsRequired:` + fmt.Sprintf("%v", this.ArgsRequired) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -20083,6 +20093,26 @@ func (m *ExecCalls) Unmarshal(dAtA []byte) error {
 			}
 			m.Envs = append(m.Envs, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ArgsRequired", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ArgsRequired = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipGenerated(dAtA[iNdEx:])
