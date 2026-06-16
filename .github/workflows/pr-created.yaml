@@ -11,10 +11,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Default to read-only at the workflow level (least privilege per Scorecard / supply-chain hardening).
+# Jobs that need elevated scopes override below.
+permissions: read-all
+
 jobs:
   pr-created:
-    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-created.yaml@main
+    permissions:
+      pull-requests: write
+      security-events: write
+      contents: read
+    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-created.yaml@e66ff8b85fb5db1392eeda655094109ee5e2a8da # v1.0.176
     with:
       CGO_ENABLED: 0
       GO_VERSION: "1.25"
     secrets: inherit
+

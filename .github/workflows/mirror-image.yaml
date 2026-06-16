@@ -1,0 +1,54 @@
+# =============================================================================
+# Storage image mirror
+# =============================================================================
+#
+# Pulls a public image from any registry (typically quay.io/kubescape/storage:<tag>
+# for upstream-published versions) and re-publishes it to
+# ghcr.io/${{ github.repository_owner }}/storage:<TARGET_TAG>. Used by the
+# regression harness to seed the kind cluster with a known-good storage image
+# without locally rebuilding it.
+#
+# The chart deployed in component-tests defaults storage.image.repository to
+# ghcr.io/<owner>/storage, so the mirrored image is plug-compatible — the CT
+# workflow needs no override beyond storage.image.tag.
+#
+# Triggers are workflow_dispatch only — no path for external contributors to
+# repush arbitrary content.
+# =============================================================================
+
+name: mirror-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      SOURCE_IMAGE:
+        description: "Full source image reference (e.g. quay.io/kubescape/storage:v0.0.278)"
+        required: true
+        type: string
+      TARGET_TAG:
+        description: "Tag to publish at ghcr.io/<owner>/storage"
+        required: true
+        type: string
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Login to ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copy image
+        run: |
+          SOURCE="${{ inputs.SOURCE_IMAGE }}"
+          TARGET="ghcr.io/${{ github.repository_owner }}/storage:${{ inputs.TARGET_TAG }}"
+          echo "Copying ${SOURCE} -> ${TARGET}"
+          crane copy "${SOURCE}" "${TARGET}"
+          echo "Mirror complete: ${TARGET}"
