@@ -26,9 +26,8 @@ const DefaultCollapseConfigurationName = "default"
 
 // collapseConfigGetTimeout bounds each storage Get so a slow or
 // self-referential read on the apiserver's own storage can never stall the
-// caller. On timeout/error the provider keeps the last known settings (or
-// the default). Addresses CodeRabbit's "bound storage reads with a timeout
-// to prevent request-path stalls" finding.
+// caller. On timeout/error the provider keeps the last known-good settings;
+// it only falls back to defaults when the CR is genuinely absent.
 const collapseConfigGetTimeout = 2 * time.Second
 
 // collapseConfigRefreshInterval is how often the background refresher polls
@@ -55,16 +54,28 @@ func collapseConfigurationKey(name string) string {
 
 // NewCRDCollapseSettingsProvider returns a CollapseSettingsProvider that
 // reads the cluster-scoped CollapseConfiguration/<DefaultCollapseConfigurationName>
-// and projects it via dynamicpathdetector.CollapseSettingsFromCRD, falling
-// back to dynamicpathdetector.DefaultCollapseSettings when the CR is missing,
-// unreadable, or storage is nil.
+// and projects it via dynamicpathdetector.CollapseSettingsFromCRD. It falls
+// back to dynamicpathdetector.DefaultCollapseSettings when storage is nil or
+// the CR is genuinely absent; a transient read error keeps the last
+// known-good snapshot rather than reverting an applied configuration.
 //
 // The storage read is NEVER performed on the deflate (request) path: it runs
 // in a bounded-timeout background refresher, and the returned closure only
 // reads an atomically-published snapshot. This prevents the self-referential
 // per-call Get from stalling the apiserver under load while keeping operator
-// edits live within collapseConfigRefreshInterval.
+// edits live within collapseConfigRefreshInterval. The background refresher
+// lives for the process lifetime (acceptable for a server-lifetime provider);
+// the unexported variant takes a stop channel used by tests and available for
+// a future graceful-shutdown hook.
 func NewCRDCollapseSettingsProvider(s storage.Interface) dynamicpathdetector.CollapseSettingsProvider {
+	return newCRDCollapseSettingsProvider(s, collapseConfigRefreshInterval, nil)
+}
+
+// newCRDCollapseSettingsProvider is the testable core: refreshInterval and the
+// stop channel are injectable so tests can poll on a short interval and shut
+// the refresher down deterministically. A nil stop channel never fires, so the
+// exported constructor's goroutine runs for the process lifetime.
+func newCRDCollapseSettingsProvider(s storage.Interface, refreshInterval time.Duration, stop <-chan struct{}) dynamicpathdetector.CollapseSettingsProvider {
 	if s == nil {
 		return dynamicpathdetector.DefaultCollapseSettings
 	}
@@ -78,9 +89,17 @@ func NewCRDCollapseSettingsProvider(s storage.Interface) dynamicpathdetector.Col
 		ctx, cancel := context.WithTimeout(context.Background(), collapseConfigGetTimeout)
 		defer cancel()
 		crd := &softwarecomposition.CollapseConfiguration{}
-		err := s.Get(ctx, key, storage.GetOptions{IgnoreNotFound: true}, crd)
+		if err := s.Get(ctx, key, storage.GetOptions{IgnoreNotFound: true}, crd); err != nil {
+			// Transient read error (timeout, etcd blip): keep the last
+			// known-good snapshot instead of reverting an operator-applied
+			// configuration to defaults. The next tick retries.
+			return
+		}
 		var settings dynamicpathdetector.CollapseSettings
-		if err != nil || crd.Name == "" {
+		if crd.Name == "" {
+			// CR genuinely absent: IgnoreNotFound zeroed the out object.
+			// CollapseSettingsFromCRD only defaults for a nil pointer, so the
+			// empty-name guard is required to avoid all-zero thresholds here.
 			settings = dynamicpathdetector.DefaultCollapseSettings()
 		} else {
 			settings = dynamicpathdetector.CollapseSettingsFromCRD(crd)
@@ -88,12 +107,20 @@ func NewCRDCollapseSettingsProvider(s storage.Interface) dynamicpathdetector.Col
 		current.Store(&settings)
 	}
 
-	refresh() // initial, bounded; falls back to default on timeout
+	// Initial bounded refresh (<= collapseConfigGetTimeout) seeds the snapshot
+	// before the provider is used. This is the only synchronous storage touch
+	// and never happens on the deflate (request) path.
+	refresh()
 	go func() {
-		t := time.NewTicker(collapseConfigRefreshInterval)
+		t := time.NewTicker(refreshInterval)
 		defer t.Stop()
-		for range t.C {
-			refresh()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				refresh()
+			}
 		}
 	}()
 
