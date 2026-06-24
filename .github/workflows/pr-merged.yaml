@@ -9,6 +9,10 @@ on:
       - '.github/workflows/*' ### Ignore running when files under path: .github/workflows/* changed.
   workflow_dispatch:
 
+# Default to read-only at the workflow level (least privilege per Scorecard / supply-chain hardening).
+# Jobs that need elevated scopes override below.
+permissions: read-all
+
 jobs:
   pr-merged:
     if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
@@ -18,8 +22,7 @@ jobs:
       packages: write
       contents: write
       pull-requests: read
-      attestations: write  # required by actions/attest-build-provenance in the shared workflow
-    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-merged.yaml@main
+    uses: kubescape/workflows/.github/workflows/incluster-comp-pr-merged.yaml@e66ff8b85fb5db1392eeda655094109ee5e2a8da # v1.0.176
     with:
       IMAGE_NAME: quay.io/${{ github.repository_owner }}/storage
       IMAGE_TAG: v0.0.${{ github.run_number }}
