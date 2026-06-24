@@ -12,6 +12,8 @@ package file
 
 import (
 	"context"
+	"sync/atomic"
+	"time"
 
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
 	"github.com/kubescape/storage/pkg/registry/file/dynamicpathdetector"
@@ -19,59 +21,71 @@ import (
 )
 
 // DefaultCollapseConfigurationName is the cluster-scoped CR name the
-// deflate path reads to learn effective collapse thresholds. Operators
-// (and the bobctl autotune flow) write/edit this CR; if it is absent
-// the provider falls back to dynamicpathdetector.DefaultCollapseSettings.
+// deflate path reads to learn effective collapse thresholds.
 const DefaultCollapseConfigurationName = "default"
 
-// collapseConfigurationKey is the in-storage key for the cluster-scoped
-// CollapseConfiguration/default CR. Built from the same K8sKeysToPath
-// helper the rest of this package uses, so it stays in sync with how
-// the CR is written by the apiserver's REST endpoint.
-//
-// CollapseConfiguration is cluster-scoped (NamespaceScoped() == false
-// in pkg/registry/softwarecomposition/collapseconfiguration/strategy.go),
-// so namespace is the empty string.
+// collapseConfigGetTimeout bounds each storage Get so a slow or
+// self-referential read on the apiserver's own storage can never stall the
+// caller. On timeout/error the provider keeps the last known settings (or
+// the default). Addresses CodeRabbit's "bound storage reads with a timeout
+// to prevent request-path stalls" finding.
+const collapseConfigGetTimeout = 2 * time.Second
+
+// collapseConfigRefreshInterval is how often the background refresher polls
+// storage for CollapseConfiguration/default. Deflate runs per-profile under
+// load; the previous per-call Get stalled the request path, so the Get now
+// happens off the request path and operator edits go live within one tick.
+const collapseConfigRefreshInterval = 10 * time.Second
+
 func collapseConfigurationKey(name string) string {
 	return K8sKeysToPath("", "spdx.softwarecomposition.kubescape.io", "collapseconfigurations", "", "", name)
 }
 
-// NewCRDCollapseSettingsProvider returns a CollapseSettingsProvider
-// closure that, on each invocation, looks up the cluster-scoped
-// CollapseConfiguration/<DefaultCollapseConfigurationName> in storage
-// and projects it via dynamicpathdetector.CollapseSettingsFromCRD. If
-// the CR is missing, unreadable, or storage is nil, the provider
-// returns dynamicpathdetector.DefaultCollapseSettings so the deflate
-// path always has working thresholds.
+// NewCRDCollapseSettingsProvider returns a CollapseSettingsProvider that
+// reads the cluster-scoped CollapseConfiguration/<DefaultCollapseConfigurationName>
+// and projects it via dynamicpathdetector.CollapseSettingsFromCRD, falling
+// back to dynamicpathdetector.DefaultCollapseSettings when the CR is missing,
+// unreadable, or storage is nil.
 //
-// This is the wire between the apiserver's CRD endpoint (registered at
-// /apis/.../collapseconfigurations in pkg/apiserver/apiserver.go) and
-// the in-process application/container profile processors that perform
-// compaction. Without this provider the CRD is stored but never
-// consulted — applying a CollapseConfiguration manifest would be a
-// no-op (matthyx review on pkg/apiserver/apiserver.go:164, 2026-05-27).
-//
-// The closure performs a storage Get per call rather than caching, so
-// edits to the CR take effect on the next deflate without restart or
-// manual invalidation. Deflate frequency is low compared to disk Get
-// latency, so the simplicity wins; if benchmarks ever surface this
-// as hot, wrap with a watched cache.
+// The storage read is NEVER performed on the deflate (request) path: it runs
+// in a bounded-timeout background refresher, and the returned closure only
+// reads an atomically-published snapshot. This prevents the self-referential
+// per-call Get from stalling the apiserver under load while keeping operator
+// edits live within collapseConfigRefreshInterval.
 func NewCRDCollapseSettingsProvider(s storage.Interface) dynamicpathdetector.CollapseSettingsProvider {
 	if s == nil {
 		return dynamicpathdetector.DefaultCollapseSettings
 	}
 	key := collapseConfigurationKey(DefaultCollapseConfigurationName)
-	return func() dynamicpathdetector.CollapseSettings {
+
+	var current atomic.Pointer[dynamicpathdetector.CollapseSettings]
+	def := dynamicpathdetector.DefaultCollapseSettings()
+	current.Store(&def)
+
+	refresh := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), collapseConfigGetTimeout)
+		defer cancel()
 		crd := &softwarecomposition.CollapseConfiguration{}
-		// IgnoreNotFound returns the zero-valued CR with nil error when
-		// the CR is missing — the operator hasn't applied a manifest
-		// yet, which is the common bootstrap case. Distinguish by
-		// checking ObjectMeta.Name (the storage layer only populates
-		// it when a real CR was decoded).
-		err := s.Get(context.Background(), key, storage.GetOptions{IgnoreNotFound: true}, crd)
+		err := s.Get(ctx, key, storage.GetOptions{IgnoreNotFound: true}, crd)
+		var settings dynamicpathdetector.CollapseSettings
 		if err != nil || crd.Name == "" {
-			return dynamicpathdetector.DefaultCollapseSettings()
+			settings = dynamicpathdetector.DefaultCollapseSettings()
+		} else {
+			settings = dynamicpathdetector.CollapseSettingsFromCRD(crd)
 		}
-		return dynamicpathdetector.CollapseSettingsFromCRD(crd)
+		current.Store(&settings)
+	}
+
+	refresh() // initial, bounded; falls back to default on timeout
+	go func() {
+		t := time.NewTicker(collapseConfigRefreshInterval)
+		defer t.Stop()
+		for range t.C {
+			refresh()
+		}
+	}()
+
+	return func() dynamicpathdetector.CollapseSettings {
+		return *current.Load()
 	}
 }
