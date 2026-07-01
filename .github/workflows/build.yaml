@@ -175,12 +175,19 @@ jobs:
             PLATFORM_FLAG="--platform linux/amd64,linux/arm64"
           fi
 
+          # provenance/sbom attestations wrap the push in an OCI index with
+          # unknown/unknown attestation manifests that kind's containerd fails to
+          # pull ("trying and failing to pull image"). Disable them so the image
+          # is a plain manifest (single-arch) / clean manifest-list (multi-arch)
+          # that in-cluster kubelets can pull.
           docker buildx build . \
             --file build/Dockerfile \
             --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             --build-arg image_version="${IMAGE_TAG}" \
             --build-arg client="${CLIENT}" \
+            --provenance=false \
+            --sbom=false \
             --push \
             ${PLATFORM_FLAG}
 
