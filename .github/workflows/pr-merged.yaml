@@ -13,15 +13,14 @@ jobs:
   pr-merged:
     if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
     permissions:
-      actions: write
+      actions: read
       id-token: write
       packages: write
       contents: write
       pull-requests: read
-      attestations: write  # required by actions/attest-build-provenance in the shared workflow
     uses: kubescape/workflows/.github/workflows/incluster-comp-pr-merged.yaml@main
     with:
-      IMAGE_NAME: quay.io/${{ github.repository_owner }}/storage
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/storage
       IMAGE_TAG: v0.0.${{ github.run_number }}
       COMPONENT_NAME: storage
       CGO_ENABLED: 0
