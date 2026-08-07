@@ -67,6 +67,7 @@ jobs:
       client: ${{ steps.params.outputs.client }}
       platforms: ${{ steps.params.outputs.platforms }}
       build_ref: ${{ steps.params.outputs.build_ref }}
+      build_sha: ${{ steps.params.outputs.build_sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -128,6 +129,12 @@ jobs:
           else
             echo "build_ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
           fi
+          # build_sha is the resolved commit of the code we actually built
+          # (the Checkout step above checked out build_ref). Downstream
+          # node-agent go-mod-replaces storage@build_sha, so this MUST be the
+          # storage commit we built — not GITHUB_SHA, which on a --ref fork-ci
+          # dispatch is fork-ci's HEAD, not the SOURCE_REF we built.
+          echo "build_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   # -------------------------------------------------------------------
   # Build and push the storage container image.
@@ -205,7 +212,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
         run: |
           IMAGE_TAG="${{ needs.detect-changes.outputs.image_tag }}"
-          STORAGE_REF="${GITHUB_SHA}"
+          STORAGE_REF="${{ needs.detect-changes.outputs.build_sha }}"
           # Dispatch node-agent on the same ref shape we just built. If
           # SOURCE_REF was set (building an upstream-pr/** branch), tell
           # node-agent to build its matching upstream-pr/** branch too.
