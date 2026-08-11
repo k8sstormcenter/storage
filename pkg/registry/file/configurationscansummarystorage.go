@@ -65,10 +65,6 @@ func (s *ConfigurationScanSummaryStorage) Get(ctx context.Context, key string, _
 		return err
 	}
 
-	if &workloadScanSummaryListObjPtr == nil {
-		return storage.NewInternalError(fmt.Errorf("workload scan summary list is nil"))
-	}
-
 	if len(workloadScanSummaryListObjPtr.Items) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
