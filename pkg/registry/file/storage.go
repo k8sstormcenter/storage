@@ -1039,6 +1039,12 @@ func (s *StorageImpl) GuaranteedUpdateWithConn(
 			continue
 		}
 
+		if reflect.DeepEqual(origState.obj, ret) {
+			logger.L().Debug("GuaranteedUpdate - tryUpdate returned an unchanged object, no update needed", helpers.String("key", key))
+			v.Set(reflect.ValueOf(origState.obj).Elem())
+			return nil
+		}
+
 		// add conn to context
 		ctx = context.WithValue(ctx, connKey, conn)
 
