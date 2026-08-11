@@ -115,10 +115,10 @@ func (h *ResourcesCleanupHandler) RunCleanupTask(ctx context.Context) {
 func (h *ResourcesCleanupHandler) CleanupTask(ctx context.Context, resourceToKindHandler map[string][]TypeCleanupHandlerFunc) error {
 	// take SQLite connection from the pool
 	conn, err := h.pool.Take(context.Background())
-	defer h.pool.Put(conn)
 	if err != nil {
 		return fmt.Errorf("failed to take connection: %w", err)
 	}
+	defer h.pool.Put(conn)
 	// list namespaces
 	namespaces, err := h.fetcher.ListNamespaces(conn)
 	if err != nil {
@@ -150,8 +150,7 @@ func (h *ResourcesCleanupHandler) CleanupTask(ctx context.Context, resourceToKin
 		RunningTemplateHash:          mapset.NewSet[string](),
 		RunningWlidsToContainerNames: new(maps.SafeMap[string, mapset.Set[string]]),
 	}
-	err = h.cleanupNamespace(ctx, h.defaultNamespace, resourceToKindHandler, conn, resources)
-	return nil
+	return h.cleanupNamespace(ctx, h.defaultNamespace, resourceToKindHandler, conn, resources)
 }
 
 func (h *ResourcesCleanupHandler) cleanupNamespace(ctx context.Context, ns string, resourceToKindHandler map[string][]TypeCleanupHandlerFunc, conn *sqlite.Conn, resources ResourceMaps) error {

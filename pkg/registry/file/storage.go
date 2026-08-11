@@ -770,6 +770,7 @@ func (s *StorageImpl) GetListWithConn(ctx context.Context, conn *sqlite.Conn, ke
 			obj := reflect.New(elem).Interface().(runtime.Object)
 			if err := s.get(ctx, conn, k, storage.GetOptions{}, obj, noLock); err != nil {
 				logger.L().Ctx(ctx).Error("GetList - get object failed", helpers.Error(err), helpers.String("key", k))
+				continue
 			}
 			v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
 		}
@@ -786,6 +787,7 @@ func (s *StorageImpl) GetListWithConn(ctx context.Context, conn *sqlite.Conn, ke
 			obj := reflect.New(elem).Interface().(runtime.Object)
 			if err := json.Unmarshal([]byte(metadataJSON), obj); err != nil {
 				logger.L().Ctx(ctx).Error("GetList - unmarshal metadata failed", helpers.Error(err), helpers.String("key", key))
+				continue
 			}
 			v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
 		}
