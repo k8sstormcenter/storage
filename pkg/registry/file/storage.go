@@ -118,7 +118,6 @@ type objState struct {
 	obj  runtime.Object
 	meta *storage.ResponseMeta
 	rev  int64
-	data []byte
 }
 
 // StorageImpl offers a common interface for object marshaling/unmarshaling operations and
@@ -865,11 +864,6 @@ func (s *StorageImpl) getStateFromObject(ctx context.Context, obj runtime.Object
 	state.rev = int64(rv)
 	state.meta.ResourceVersion = uint64(state.rev)
 
-	state.data, err = json.Marshal(obj)
-	if err != nil {
-		logger.L().Ctx(ctx).Error("getStateFromObject - marshal object failed", helpers.Error(err), helpers.Interface("object", obj))
-		return nil, err
-	}
 	if err := s.versioner.UpdateObject(state.obj, rv); err != nil {
 		logger.L().Ctx(ctx).Error("getStateFromObject - update object version failed", helpers.Error(err), helpers.Interface("object", obj))
 	}
