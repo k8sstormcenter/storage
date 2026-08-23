@@ -4277,13 +4277,11 @@ func (m *NetworkNeighbor) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.Entity) > 0 {
-		i -= len(m.Entity)
-		copy(dAtA[i:], m.Entity)
-		i = encodeVarintGenerated(dAtA, i, uint64(len(m.Entity)))
-		i--
-		dAtA[i] = 0x6a
-	}
+	i -= len(m.Entity)
+	copy(dAtA[i:], m.Entity)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.Entity)))
+	i--
+	dAtA[i] = 0x6a
 	if m.ServiceSelector != nil {
 		{
 			size, err := m.ServiceSelector.MarshalToSizedBuffer(dAtA[:i])
@@ -4296,20 +4294,16 @@ func (m *NetworkNeighbor) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x62
 	}
-	if len(m.ServiceRefName) > 0 {
-		i -= len(m.ServiceRefName)
-		copy(dAtA[i:], m.ServiceRefName)
-		i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefName)))
-		i--
-		dAtA[i] = 0x5a
-	}
-	if len(m.ServiceRefNamespace) > 0 {
-		i -= len(m.ServiceRefNamespace)
-		copy(dAtA[i:], m.ServiceRefNamespace)
-		i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefNamespace)))
-		i--
-		dAtA[i] = 0x52
-	}
+	i -= len(m.ServiceRefName)
+	copy(dAtA[i:], m.ServiceRefName)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefName)))
+	i--
+	dAtA[i] = 0x5a
+	i -= len(m.ServiceRefNamespace)
+	copy(dAtA[i:], m.ServiceRefNamespace)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefNamespace)))
+	i--
+	dAtA[i] = 0x52
 	if len(m.IPAddresses) > 0 {
 		for iNdEx := len(m.IPAddresses) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.IPAddresses[iNdEx])
@@ -10226,22 +10220,16 @@ func (m *NetworkNeighbor) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
-	if len(m.ServiceRefNamespace) > 0 {
-		l = len(m.ServiceRefNamespace)
-		n += 1 + l + sovGenerated(uint64(l))
-	}
-	if len(m.ServiceRefName) > 0 {
-		l = len(m.ServiceRefName)
-		n += 1 + l + sovGenerated(uint64(l))
-	}
+	l = len(m.ServiceRefNamespace)
+	n += 1 + l + sovGenerated(uint64(l))
+	l = len(m.ServiceRefName)
+	n += 1 + l + sovGenerated(uint64(l))
 	if m.ServiceSelector != nil {
 		l = m.ServiceSelector.Size()
 		n += 1 + l + sovGenerated(uint64(l))
 	}
-	if len(m.Entity) > 0 {
-		l = len(m.Entity)
-		n += 1 + l + sovGenerated(uint64(l))
-	}
+	l = len(m.Entity)
+	n += 1 + l + sovGenerated(uint64(l))
 	return n
 }
 
@@ -13024,6 +13012,10 @@ func (this *NetworkNeighbor) String() string {
 		`NamespaceSelector:` + strings.Replace(fmt.Sprintf("%v", this.NamespaceSelector), "LabelSelector", "v1.LabelSelector", 1) + `,`,
 		`IPAddress:` + fmt.Sprintf("%v", this.IPAddress) + `,`,
 		`IPAddresses:` + fmt.Sprintf("%v", this.IPAddresses) + `,`,
+		`ServiceRefNamespace:` + fmt.Sprintf("%v", this.ServiceRefNamespace) + `,`,
+		`ServiceRefName:` + fmt.Sprintf("%v", this.ServiceRefName) + `,`,
+		`ServiceSelector:` + strings.Replace(fmt.Sprintf("%v", this.ServiceSelector), "LabelSelector", "v1.LabelSelector", 1) + `,`,
+		`Entity:` + fmt.Sprintf("%v", this.Entity) + `,`,
 		`}`,
 	}, "")
 	return s

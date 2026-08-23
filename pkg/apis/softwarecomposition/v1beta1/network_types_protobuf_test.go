@@ -46,24 +46,31 @@ func TestNetworkNeighbor_ServiceSelectors_ProtobufRoundtrip(t *testing.T) {
 	}
 }
 
-// TestNetworkNeighbor_ServiceSelectors_EmptyOmitted confirms a neighbor with
-// none of the new fields set encodes identically to before they existed.
-func TestNetworkNeighbor_ServiceSelectors_EmptyOmitted(t *testing.T) {
-	withoutNew := &NetworkNeighbor{Identifier: "id", Type: "external"}
-	withEmptyNew := &NetworkNeighbor{
-		Identifier: "id", Type: "external",
-		ServiceRefNamespace: "", ServiceRefName: "", Entity: "", ServiceSelector: nil,
+// TestNetworkNeighbor_NewFields_Absent confirms a neighbor that sets none of
+// the new fields round-trips with them empty (no corruption) and its existing
+// fields intact — the common case for profiles predating this change. The
+// scalar fields are proto2 optional/non-nullable, so go-to-protobuf marshals
+// them unconditionally (like the existing dns/ipAddress fields); this pins that
+// an unset->marshal->unmarshal cycle still yields empty, not garbage.
+func TestNetworkNeighbor_NewFields_Absent(t *testing.T) {
+	original := &NetworkNeighbor{
+		Identifier:  "id",
+		Type:        "external",
+		IPAddresses: []string{"10.0.0.0/8"},
 	}
-	a, err := withoutNew.Marshal()
+	wire, err := original.Marshal()
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	b, err := withEmptyNew.Marshal()
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
+	decoded := &NetworkNeighbor{}
+	if err := decoded.Unmarshal(wire); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
 	}
-	if !reflect.DeepEqual(a, b) {
-		t.Errorf("empty new fields must encode identically to absent (%d vs %d bytes)", len(a), len(b))
+	if decoded.ServiceRefNamespace != "" || decoded.ServiceRefName != "" || decoded.Entity != "" || decoded.ServiceSelector != nil {
+		t.Errorf("unset new fields must round-trip empty, got %+v", decoded)
+	}
+	if !reflect.DeepEqual(decoded.IPAddresses, original.IPAddresses) {
+		t.Errorf("existing field lost: got %v", decoded.IPAddresses)
 	}
 }
 
