@@ -3,7 +3,71 @@ package v1beta1
 import (
 	"reflect"
 	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// TestNetworkNeighbor_ServiceSelectors_ProtobufRoundtrip pins the wire
+// contract for the ServiceRef/ServiceSelector/Entity fields (protobuf field
+// numbers 10-13). These carry Kubernetes-native peer selectors
+// (k8sstormcenter/node-agent#92); a dropped field silently reverts an
+// allowlist to unresolved and reopens the FP/blindspot it was closing.
+func TestNetworkNeighbor_ServiceSelectors_ProtobufRoundtrip(t *testing.T) {
+	original := &NetworkNeighbor{
+		Identifier:          "svc-entry",
+		Type:                "internal",
+		ServiceRefNamespace: "honey",
+		ServiceRefName:      "alertmanager",
+		ServiceSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": "guestbook"}},
+		Entity:              "host",
+		Ports:               []NetworkPort{{Name: "TCP-9093", Protocol: "TCP", Port: ptr(int32(9093))}},
+	}
+
+	wire, err := original.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	decoded := &NetworkNeighbor{}
+	if err := decoded.Unmarshal(wire); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if decoded.ServiceRefNamespace != original.ServiceRefNamespace {
+		t.Errorf("ServiceRefNamespace: got %q want %q", decoded.ServiceRefNamespace, original.ServiceRefNamespace)
+	}
+	if decoded.ServiceRefName != original.ServiceRefName {
+		t.Errorf("ServiceRefName: got %q want %q", decoded.ServiceRefName, original.ServiceRefName)
+	}
+	if decoded.Entity != original.Entity {
+		t.Errorf("Entity: got %q want %q", decoded.Entity, original.Entity)
+	}
+	if !reflect.DeepEqual(decoded.ServiceSelector, original.ServiceSelector) {
+		t.Errorf("ServiceSelector roundtrip mismatch:\n  got:  %v\n  want: %v", decoded.ServiceSelector, original.ServiceSelector)
+	}
+}
+
+// TestNetworkNeighbor_ServiceSelectors_EmptyOmitted confirms a neighbor with
+// none of the new fields set encodes identically to before they existed.
+func TestNetworkNeighbor_ServiceSelectors_EmptyOmitted(t *testing.T) {
+	withoutNew := &NetworkNeighbor{Identifier: "id", Type: "external"}
+	withEmptyNew := &NetworkNeighbor{
+		Identifier: "id", Type: "external",
+		ServiceRefNamespace: "", ServiceRefName: "", Entity: "", ServiceSelector: nil,
+	}
+	a, err := withoutNew.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	b, err := withEmptyNew.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("empty new fields must encode identically to absent (%d vs %d bytes)", len(a), len(b))
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
 
 // TestNetworkNeighbor_IPAddresses_ProtobufRoundtrip pins the v0.0.2
 // protobuf wire contract for the new IPAddresses field. Storage persists

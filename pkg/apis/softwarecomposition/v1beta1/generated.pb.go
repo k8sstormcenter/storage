@@ -4277,6 +4277,39 @@ func (m *NetworkNeighbor) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.Entity) > 0 {
+		i -= len(m.Entity)
+		copy(dAtA[i:], m.Entity)
+		i = encodeVarintGenerated(dAtA, i, uint64(len(m.Entity)))
+		i--
+		dAtA[i] = 0x6a
+	}
+	if m.ServiceSelector != nil {
+		{
+			size, err := m.ServiceSelector.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintGenerated(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x62
+	}
+	if len(m.ServiceRefName) > 0 {
+		i -= len(m.ServiceRefName)
+		copy(dAtA[i:], m.ServiceRefName)
+		i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefName)))
+		i--
+		dAtA[i] = 0x5a
+	}
+	if len(m.ServiceRefNamespace) > 0 {
+		i -= len(m.ServiceRefNamespace)
+		copy(dAtA[i:], m.ServiceRefNamespace)
+		i = encodeVarintGenerated(dAtA, i, uint64(len(m.ServiceRefNamespace)))
+		i--
+		dAtA[i] = 0x52
+	}
 	if len(m.IPAddresses) > 0 {
 		for iNdEx := len(m.IPAddresses) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.IPAddresses[iNdEx])
@@ -10192,6 +10225,22 @@ func (m *NetworkNeighbor) Size() (n int) {
 			l = len(s)
 			n += 1 + l + sovGenerated(uint64(l))
 		}
+	}
+	if len(m.ServiceRefNamespace) > 0 {
+		l = len(m.ServiceRefNamespace)
+		n += 1 + l + sovGenerated(uint64(l))
+	}
+	if len(m.ServiceRefName) > 0 {
+		l = len(m.ServiceRefName)
+		n += 1 + l + sovGenerated(uint64(l))
+	}
+	if m.ServiceSelector != nil {
+		l = m.ServiceSelector.Size()
+		n += 1 + l + sovGenerated(uint64(l))
+	}
+	if len(m.Entity) > 0 {
+		l = len(m.Entity)
+		n += 1 + l + sovGenerated(uint64(l))
 	}
 	return n
 }
@@ -26996,6 +27045,138 @@ func (m *NetworkNeighbor) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.IPAddresses = append(m.IPAddresses, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ServiceRefNamespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ServiceRefNamespace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ServiceRefName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ServiceRefName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ServiceSelector", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ServiceSelector == nil {
+				m.ServiceSelector = &v1.LabelSelector{}
+			}
+			if err := m.ServiceSelector.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Entity", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Entity = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
