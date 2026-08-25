@@ -62,6 +62,14 @@ type OpenVulnerabilityExchangeContainerListerExpansion interface{}
 // OpenVulnerabilityExchangeContainerNamespaceLister.
 type OpenVulnerabilityExchangeContainerNamespaceListerExpansion interface{}
 
+// RogueArtifactListerExpansion allows custom methods to be added to
+// RogueArtifactLister.
+type RogueArtifactListerExpansion interface{}
+
+// RogueArtifactNamespaceListerExpansion allows custom methods to be added to
+// RogueArtifactNamespaceLister.
+type RogueArtifactNamespaceListerExpansion interface{}
+
 // SBOMSyftListerExpansion allows custom methods to be added to
 // SBOMSyftLister.
 type SBOMSyftListerExpansion interface{}

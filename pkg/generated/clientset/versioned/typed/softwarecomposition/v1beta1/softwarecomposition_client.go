@@ -34,6 +34,7 @@ type SpdxV1beta1Interface interface {
 	GeneratedNetworkPoliciesGetter
 	KnownServersGetter
 	OpenVulnerabilityExchangeContainersGetter
+	RogueArtifactsGetter
 	SBOMSyftsGetter
 	SBOMSyftFilteredsGetter
 	SeccompProfilesGetter
@@ -71,6 +72,10 @@ func (c *SpdxV1beta1Client) KnownServers(namespace string) KnownServerInterface 
 
 func (c *SpdxV1beta1Client) OpenVulnerabilityExchangeContainers(namespace string) OpenVulnerabilityExchangeContainerInterface {
 	return newOpenVulnerabilityExchangeContainers(c, namespace)
+}
+
+func (c *SpdxV1beta1Client) RogueArtifacts(namespace string) RogueArtifactInterface {
+	return newRogueArtifacts(c, namespace)
 }
 
 func (c *SpdxV1beta1Client) SBOMSyfts(namespace string) SBOMSyftInterface {
