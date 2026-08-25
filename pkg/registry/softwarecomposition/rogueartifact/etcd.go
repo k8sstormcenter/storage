@@ -51,9 +51,12 @@ func (rogueArtifactTableConvertor) ConvertToTable(_ context.Context, obj runtime
 		{Name: "Phase", Type: "string"},
 		{Name: "Since", Type: "date"},
 	}}
+	// List is metadata-only (spec is stripped by the file backend), so the
+	// discoverable columns are read from labels, which survive a List.
+	lbl := func(ra *softwarecomposition.RogueArtifact, k string) string { return ra.Labels["kubescape.io/"+k] }
 	addRow := func(ra *softwarecomposition.RogueArtifact) {
 		table.Rows = append(table.Rows, metav1.TableRow{
-			Cells:  []interface{}{ra.Name, ra.Spec.State, ra.Spec.Learning, ra.Spec.WorkloadName, ra.Spec.WorkloadKind, ra.Status.Phase, ra.Status.FiredAt},
+			Cells:  []interface{}{ra.Name, lbl(ra, "rogue-state"), lbl(ra, "rogue-learning"), lbl(ra, "workload-name"), lbl(ra, "workload-kind"), lbl(ra, "rogue-phase"), ra.CreationTimestamp},
 			Object: runtime.RawExtension{Object: ra},
 		})
 	}
