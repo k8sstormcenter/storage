@@ -36,6 +36,8 @@ type Interface interface {
 	KnownServers() KnownServerInformer
 	// OpenVulnerabilityExchangeContainers returns a OpenVulnerabilityExchangeContainerInformer.
 	OpenVulnerabilityExchangeContainers() OpenVulnerabilityExchangeContainerInformer
+	// RogueArtifacts returns a RogueArtifactInformer.
+	RogueArtifacts() RogueArtifactInformer
 	// SBOMSyfts returns a SBOMSyftInformer.
 	SBOMSyfts() SBOMSyftInformer
 	// SBOMSyftFiltereds returns a SBOMSyftFilteredInformer.
@@ -93,6 +95,11 @@ func (v *version) KnownServers() KnownServerInformer {
 // OpenVulnerabilityExchangeContainers returns a OpenVulnerabilityExchangeContainerInformer.
 func (v *version) OpenVulnerabilityExchangeContainers() OpenVulnerabilityExchangeContainerInformer {
 	return &openVulnerabilityExchangeContainerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// RogueArtifacts returns a RogueArtifactInformer.
+func (v *version) RogueArtifacts() RogueArtifactInformer {
+	return &rogueArtifactInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SBOMSyfts returns a SBOMSyftInformer.

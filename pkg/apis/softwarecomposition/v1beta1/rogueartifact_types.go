@@ -4,6 +4,8 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // RogueArtifact is the in-cluster, discoverable record of a container that is
 // not covered by a verified authored profile. One object per firing container.
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type RogueArtifact struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
@@ -32,9 +34,10 @@ type RogueArtifactStatus struct {
 	HealedAt metav1.Time `json:"healedAt,omitempty" protobuf:"bytes,3,opt,name=healedAt"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type RogueArtifactList struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []RogueArtifact `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

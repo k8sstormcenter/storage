@@ -1179,6 +1179,57 @@ message ReportMeta {
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time createdAt = 1;
 }
 
+// RogueArtifact is the in-cluster, discoverable record of a container that is
+// not covered by a verified authored profile. One object per firing container.
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message RogueArtifact {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional RogueArtifactSpec spec = 2;
+
+  optional RogueArtifactStatus status = 3;
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message RogueArtifactList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated RogueArtifact items = 2;
+}
+
+message RogueArtifactSpec {
+  optional string state = 1;
+
+  optional bool learning = 2;
+
+  optional string reason = 3;
+
+  optional string workloadName = 4;
+
+  optional string workloadKind = 5;
+
+  optional string workloadUID = 6;
+
+  optional string containerName = 7;
+
+  optional string containerID = 8;
+
+  optional string podName = 9;
+
+  optional string podUID = 10;
+
+  optional string nodeName = 11;
+}
+
+message RogueArtifactStatus {
+  optional string phase = 1;
+
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time firedAt = 2;
+
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time healedAt = 3;
+}
+
 message RulePath {
   optional string failedPath = 1;
 
