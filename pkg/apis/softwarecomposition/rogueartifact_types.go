@@ -5,6 +5,8 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // RogueArtifact is the in-cluster, discoverable record of a container that is
 // not covered by a verified authored profile. One object per firing container;
 // node-agent creates it on fire and transitions it to Healed on governance.
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type RogueArtifact struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
@@ -44,9 +46,10 @@ type RogueArtifactStatus struct {
 	HealedAt metav1.Time
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type RogueArtifactList struct {
 	metav1.TypeMeta
-	metav1.ObjectMeta
+	metav1.ListMeta
 
 	Items []RogueArtifact
 }
