@@ -41,7 +41,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/version"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -121,8 +120,14 @@ func NewWardleServerOptions(out, errOut io.Writer, osFs afero.Fs, pool *sqlitemi
 	// informer this plugin needs are built by RecommendedOptions.ApplyTo.
 	// NOTE: the storage ServiceAccount needs namespaces get/list/watch or the
 	// plugin's ready-gate rejects every request.
+	// Keep the default RecommendedPluginOrder (options.Validate REQUIRES every
+	// registered plugin to be listed there) and turn the webhook/policy plugins
+	// off instead — NamespaceLifecycle is the only one left enabled.
 	o.RecommendedOptions.Admission = genericoptions.NewAdmissionOptions()
-	o.RecommendedOptions.Admission.RecommendedPluginOrder = []string{lifecycle.PluginName}
+	o.RecommendedOptions.Admission.DefaultOffPlugins.Insert(
+		"MutatingAdmissionPolicy", "MutatingAdmissionWebhook",
+		"ValidatingAdmissionPolicy", "ValidatingAdmissionWebhook",
+	)
 	o.RecommendedOptions.Etcd = nil
 
 	// Disable authorization since we are publishing an internal endpoint (that only answers the API server)

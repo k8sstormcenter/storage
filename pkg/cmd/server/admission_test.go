@@ -125,6 +125,13 @@ func admissionTestConfig(t *testing.T) *apiserver.Config {
 // silently disabled the ENTIRE admission chain — NamespaceLifecycle included —
 // so writes into non-existent namespaces persist (issue #43).
 func TestConfigWiresAdmissionControl(t *testing.T) {
+	// Boot-time validation must pass too: cli.Run validates options before
+	// serving, and it REQUIRES every registered plugin to appear in
+	// RecommendedPluginOrder (a narrowed order boots nothing — observed live).
+	vo := newTestOptions()
+	require.Empty(t, vo.RecommendedOptions.Admission.Validate(),
+		"admission options must survive boot-time validation")
+
 	cfg := admissionTestConfig(t)
 	require.NotNil(t, cfg.GenericConfig.AdmissionControl,
 		"the admission chain must be wired — a nil chain means namespace lifecycle is not enforced (issue #43)")
