@@ -20,8 +20,8 @@ func NewREST(scheme *runtime.Scheme, storageImpl storage.Interface, optsGetter g
 		NewFunc:                   func() runtime.Object { return &softwarecomposition.RogueArtifact{} },
 		NewListFunc:               func() runtime.Object { return &softwarecomposition.RogueArtifactList{} },
 		PredicateFunc:             MatchRogueArtifact,
-		DefaultQualifiedResource:  softwarecomposition.Resource("rogueartifact"),
-		SingularQualifiedResource: softwarecomposition.Resource("rogueartifacts"),
+		DefaultQualifiedResource:  softwarecomposition.Resource("rogueartifacts"),
+		SingularQualifiedResource: softwarecomposition.Resource("rogueartifact"),
 
 		Storage: genericregistry.DryRunnableStorage{Codec: nil, Storage: storageImpl},
 
