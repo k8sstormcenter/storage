@@ -61,14 +61,14 @@ func NewPool(path string, size int) *sqlitemigration.Pool {
 		},
 		sqlitemigration.Options{
 			PoolSize: size,
-			// Under write bursts (per-container profile churn plus the
-			// RogueArtifact class) a writer can hold the lock beyond the
-			// driver's 10s default busy timeout on slow disks, surfacing raw
-			// "database is locked" to API clients. Wait instead of failing.
-			PrepareConn: func(conn *sqlite.Conn) error {
-				conn.SetBusyTimeout(60 * time.Second)
-				return nil
-			},
+			// Keep the driver's default 10s busy timeout. A longer wait looked
+			// safer against "database is locked" errors, but writers queueing
+			// on the single write lock PARK their pool connection for the full
+			// wait — with a 60s timeout a write burst drained the whole pool
+			// and read requests died on "acquisition timed out", starving the
+			// ContainerProfile pipeline cluster-wide. Lock errors are
+			// retriable for every writer (the node-agent queue requeues, the
+			// consolidator re-runs); fail fast and free the connection.
 		})
 }
 
