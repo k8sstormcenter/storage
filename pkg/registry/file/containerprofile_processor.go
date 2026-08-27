@@ -590,6 +590,16 @@ func (a *ContainerProfileProcessor) updateProfile(ctx context.Context, timeSerie
 	creationTimestamp := metav1.Now()
 	var newData bool
 
+	// Snapshot the lifecycle annotations: a status transition must persist even
+	// when this pass merged no new part data. The completed/full finalization
+	// can land one maintenance pass AFTER the final part was merged (slow-disk
+	// timing); that pass has hasNewData=false, and gating the save on new data
+	// alone dropped the in-memory Completed/Full status while the time-series
+	// rows were already deleted — leaving the served profile stuck in 'ready'
+	// forever with nothing left to consolidate.
+	prevStatus := profile.Annotations[helpers.StatusMetadataKey]
+	prevCompletion := profile.Annotations[helpers.CompletionMetadataKey]
+
 	// Process each time series
 	for seriesID := range timeSeries {
 		processResult, err := a.processTimeSeries(ctx, timeSeries, seriesID, key, &profile, &creationTimestamp, expired)
@@ -612,10 +622,13 @@ func (a *ContainerProfileProcessor) updateProfile(ctx context.Context, timeSerie
 		return processed, nil
 	}
 
-	// Persist the canonical observed CP only when time-series consolidation
-	// produced new data this tick. The observed CP is the time-series-only
-	// view (kubescape/storage#315 review).
-	if newData {
+	// Persist the canonical observed CP when time-series consolidation produced
+	// new data this tick OR when the lifecycle status transitioned (completion
+	// finalization arrives without new part data). The observed CP is the
+	// time-series-only view (kubescape/storage#315 review).
+	statusChanged := profile.Annotations[helpers.StatusMetadataKey] != prevStatus ||
+		profile.Annotations[helpers.CompletionMetadataKey] != prevCompletion
+	if newData || statusChanged {
 		if profile.CreationTimestamp.IsZero() {
 			profile.CreationTimestamp = creationTimestamp
 		}
