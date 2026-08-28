@@ -25,37 +25,49 @@ func frameKey(frame types.StackFrame) string {
 
 // pathKey converts a call stack path to a single string key
 func pathKey(nodes []types.CallStackNode) string {
-	parts := make([]string, len(nodes))
-	for i, node := range nodes {
-		parts[i] = frameKey(node.Frame)
+	size := 0
+	for i := range nodes {
+		size += len(nodes[i].Frame.FileID) + len(nodes[i].Frame.Lineno) + 2
 	}
-	return strings.Join(parts, "/")
+	var b strings.Builder
+	b.Grow(size)
+	for i := range nodes {
+		if i > 0 {
+			b.WriteByte('/')
+		}
+		b.WriteString(nodes[i].Frame.FileID)
+		b.WriteByte(':')
+		b.WriteString(nodes[i].Frame.Lineno)
+	}
+	return b.String()
 }
 
 // getCallStackPaths returns all complete paths in a call stack
 func getCallStackPaths(cs types.CallStack) [][]types.CallStackNode {
 	var paths [][]types.CallStackNode
-	var traverse func(node types.CallStackNode, currentPath []types.CallStackNode)
+	var current []types.CallStackNode
+	var traverse func(node types.CallStackNode)
 
-	traverse = func(node types.CallStackNode, currentPath []types.CallStackNode) {
-		path := append([]types.CallStackNode{}, currentPath...)
-		path = append(path, node)
-
+	traverse = func(node types.CallStackNode) {
+		current = append(current, node)
 		if len(node.Children) == 0 {
+			path := make([]types.CallStackNode, len(current))
+			copy(path, current)
 			paths = append(paths, path)
-			return
+		} else {
+			for _, child := range node.Children {
+				traverse(child)
+			}
 		}
-		for _, child := range node.Children {
-			traverse(child, path)
-		}
+		current = current[:len(current)-1]
 	}
 
 	if isEmptyFrame(cs.Root.Frame) {
 		for _, child := range cs.Root.Children {
-			traverse(child, nil)
+			traverse(child)
 		}
 	} else {
-		traverse(cs.Root, nil)
+		traverse(cs.Root)
 	}
 
 	return paths

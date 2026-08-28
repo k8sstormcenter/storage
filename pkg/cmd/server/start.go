@@ -31,7 +31,6 @@ import (
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1"
 	"github.com/kubescape/storage/pkg/apiserver"
 	"github.com/kubescape/storage/pkg/config"
-	informers "github.com/kubescape/storage/pkg/generated/informers/externalversions"
 	sampleopenapi "github.com/kubescape/storage/pkg/generated/openapi"
 	"github.com/kubescape/storage/pkg/queuemanager"
 	"github.com/kubescape/storage/pkg/registry/file"
@@ -66,9 +65,8 @@ type WardleServerOptions struct {
 	// ComponentGlobalsRegistry is the registry where the effective versions and feature gates for all components are stored.
 	ComponentGlobalsRegistry basecompatibility.ComponentGlobalsRegistry
 
-	SharedInformerFactory informers.SharedInformerFactory
-	StdOut                io.Writer
-	StdErr                io.Writer
+	StdOut io.Writer
+	StdErr io.Writer
 
 	AlternateDNS []string
 

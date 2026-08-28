@@ -222,3 +222,7 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/armosec/armoapi-go => github.com/k8sstormcenter/armoapi-go v0.0.742
+
+replace github.com/armosec/utils-k8s-go => github.com/k8sstormcenter/utils-k8s-go v0.0.35

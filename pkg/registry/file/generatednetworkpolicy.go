@@ -33,34 +33,13 @@ const (
 
 // GeneratedNetworkPolicyStorage offers a storage solution for GeneratedNetworkPolicy objects, implementing custom business logic for these objects and using the underlying default storage implementation.
 type GeneratedNetworkPolicyStorage struct {
-	immutableStorage
-	realStore StorageQuerier
-}
-
-func (s *GeneratedNetworkPolicyStorage) EnableResourceSizeEstimation(keysFunc storage.KeysFunc) error {
-	return nil
-}
-
-func (s *GeneratedNetworkPolicyStorage) Stats(_ context.Context) (storage.Stats, error) {
-	return storage.Stats{}, fmt.Errorf("unimplemented")
-}
-
-func (s *GeneratedNetworkPolicyStorage) SetKeysFunc(_ storage.KeysFunc) {}
-
-func (s *GeneratedNetworkPolicyStorage) CompactRevision() int64 {
-	return 0
+	virtualStorageBase
 }
 
 var _ storage.Interface = (*GeneratedNetworkPolicyStorage)(nil)
 
 func NewGeneratedNetworkPolicyStorage(realStore StorageQuerier) storage.Interface {
-	return &GeneratedNetworkPolicyStorage{
-		realStore: realStore,
-	}
-}
-
-func (s *GeneratedNetworkPolicyStorage) GetCurrentResourceVersion(_ context.Context) (uint64, error) {
-	return 0, nil
+	return &GeneratedNetworkPolicyStorage{virtualStorageBase{realStore: realStore}}
 }
 
 // workloadPolicyName derives the workload-level GeneratedNetworkPolicy name for a

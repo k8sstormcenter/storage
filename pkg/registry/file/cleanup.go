@@ -118,10 +118,10 @@ func (h *ResourcesCleanupHandler) RunCleanupTask(ctx context.Context) {
 func (h *ResourcesCleanupHandler) CleanupTask(ctx context.Context, resourceToKindHandler map[string][]TypeCleanupHandlerFunc) error {
 	// take SQLite connection from the pool
 	conn, err := h.pool.Take(context.Background())
-	defer h.pool.Put(conn)
 	if err != nil {
 		return fmt.Errorf("failed to take connection: %w", err)
 	}
+	defer h.pool.Put(conn)
 	// list namespaces
 	namespaces, err := h.fetcher.ListNamespaces(conn)
 	if err != nil {
@@ -153,8 +153,7 @@ func (h *ResourcesCleanupHandler) CleanupTask(ctx context.Context, resourceToKin
 		RunningTemplateHash:          mapset.NewSet[string](),
 		RunningWlidsToContainerNames: new(maps.SafeMap[string, mapset.Set[string]]),
 	}
-	err = h.cleanupNamespace(ctx, h.defaultNamespace, resourceToKindHandler, conn, resources)
-	return nil
+	return h.cleanupNamespace(ctx, h.defaultNamespace, resourceToKindHandler, conn, resources)
 }
 
 func (h *ResourcesCleanupHandler) cleanupNamespace(ctx context.Context, ns string, resourceToKindHandler map[string][]TypeCleanupHandlerFunc, conn *sqlite.Conn, resources ResourceMaps) error {
@@ -342,13 +341,3 @@ func deleteMissingWlidAnnotation(_, _ string, metadata *metav1.ObjectMeta, _ Res
 	return !ok
 }
 
-// deleteWrongSchemaVersion deletes resources that have missing or unexpected schema version
-func deleteWrongSchemaVersion(_, _ string, metadata *metav1.ObjectMeta, _ ResourceMaps) bool {
-	// schema version is transferred via annotations by loadMetadata
-	v, ok := metadata.Annotations["schemaVersion"]
-	if ok && v == fmt.Sprintf("%d", SchemaVersion) {
-		return false
-	}
-	logger.L().Debug("deleting resource with wrong schema version", helpers.String("name", metadata.Name), helpers.String("namespace", metadata.Namespace), helpers.String("schemaVersion", v))
-	return true
-}

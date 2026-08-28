@@ -118,7 +118,6 @@ type objState struct {
 	obj  runtime.Object
 	meta *storage.ResponseMeta
 	rev  int64
-	data []byte
 }
 
 // StorageImpl offers a common interface for object marshaling/unmarshaling operations and
@@ -770,6 +769,7 @@ func (s *StorageImpl) GetListWithConn(ctx context.Context, conn *sqlite.Conn, ke
 			obj := reflect.New(elem).Interface().(runtime.Object)
 			if err := s.get(ctx, conn, k, storage.GetOptions{}, obj, noLock); err != nil {
 				logger.L().Ctx(ctx).Error("GetList - get object failed", helpers.Error(err), helpers.String("key", k))
+				continue
 			}
 			v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
 		}
@@ -786,6 +786,7 @@ func (s *StorageImpl) GetListWithConn(ctx context.Context, conn *sqlite.Conn, ke
 			obj := reflect.New(elem).Interface().(runtime.Object)
 			if err := json.Unmarshal([]byte(metadataJSON), obj); err != nil {
 				logger.L().Ctx(ctx).Error("GetList - unmarshal metadata failed", helpers.Error(err), helpers.String("key", key))
+				continue
 			}
 			v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))
 		}
@@ -863,11 +864,6 @@ func (s *StorageImpl) getStateFromObject(ctx context.Context, obj runtime.Object
 	state.rev = int64(rv)
 	state.meta.ResourceVersion = uint64(state.rev)
 
-	state.data, err = json.Marshal(obj)
-	if err != nil {
-		logger.L().Ctx(ctx).Error("getStateFromObject - marshal object failed", helpers.Error(err), helpers.Interface("object", obj))
-		return nil, err
-	}
 	if err := s.versioner.UpdateObject(state.obj, rv); err != nil {
 		logger.L().Ctx(ctx).Error("getStateFromObject - update object version failed", helpers.Error(err), helpers.Interface("object", obj))
 	}
@@ -1041,6 +1037,12 @@ func (s *StorageImpl) GuaranteedUpdateWithConn(
 
 			// Retry
 			continue
+		}
+
+		if reflect.DeepEqual(origState.obj, ret) {
+			logger.L().Debug("GuaranteedUpdate - tryUpdate returned an unchanged object, no update needed", helpers.String("key", key))
+			v.Set(reflect.ValueOf(origState.obj).Elem())
+			return nil
 		}
 
 		// add conn to context

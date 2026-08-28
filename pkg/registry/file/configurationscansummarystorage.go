@@ -3,7 +3,6 @@ package file
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/go-logger/helpers"
@@ -23,32 +22,13 @@ const (
 
 // ConfigurationScanSummaryStorage offers a storage solution for ConfigurationScanSummary objects, implementing custom business logic for these objects and using the underlying default storage implementation.
 type ConfigurationScanSummaryStorage struct {
-	immutableStorage
-	realStore StorageQuerier
-}
-
-func (s *ConfigurationScanSummaryStorage) EnableResourceSizeEstimation(keysFunc storage.KeysFunc) error {
-	return nil
-}
-
-func (s *ConfigurationScanSummaryStorage) Stats(_ context.Context) (storage.Stats, error) {
-	return storage.Stats{}, fmt.Errorf("unimplemented")
-}
-
-func (s *ConfigurationScanSummaryStorage) SetKeysFunc(_ storage.KeysFunc) {}
-
-func (s *ConfigurationScanSummaryStorage) CompactRevision() int64 {
-	return 0
+	virtualStorageBase
 }
 
 var _ storage.Interface = (*ConfigurationScanSummaryStorage)(nil)
 
 func NewConfigurationScanSummaryStorage(realStore StorageQuerier) storage.Interface {
-	return &ConfigurationScanSummaryStorage{realStore: realStore}
-}
-
-func (s *ConfigurationScanSummaryStorage) GetCurrentResourceVersion(_ context.Context) (uint64, error) {
-	return 0, nil
+	return &ConfigurationScanSummaryStorage{virtualStorageBase{realStore: realStore}}
 }
 
 // Get generates and returns a single ConfigurationScanSummary object for a namespace
@@ -65,27 +45,25 @@ func (s *ConfigurationScanSummaryStorage) Get(ctx context.Context, key string, _
 		return err
 	}
 
-	if &workloadScanSummaryListObjPtr == nil {
-		return storage.NewInternalError(fmt.Errorf("workload scan summary list is nil"))
-	}
-
 	if len(workloadScanSummaryListObjPtr.Items) == 0 {
 		return storage.NewKeyNotFoundError(key, 0)
 	}
 
 	configurationScanSummaryObj := buildConfigurationScanSummary(*workloadScanSummaryListObjPtr, namespace)
 
-	data, err := json.Marshal(configurationScanSummaryObj)
+	return marshalSummaryInto(ctx, configurationScanSummaryObj, objPtr, key)
+}
+
+func marshalSummaryInto(ctx context.Context, src any, dst runtime.Object, key string) error {
+	data, err := json.Marshal(src)
 	if err != nil {
 		logger.L().Ctx(ctx).Error("json marshal failed", helpers.Error(err), helpers.String("key", key))
 		return err
 	}
-
-	if err = json.Unmarshal(data, objPtr); err != nil {
+	if err = json.Unmarshal(data, dst); err != nil {
 		logger.L().Ctx(ctx).Error("json unmarshal failed", helpers.Error(err), helpers.String("key", key))
 		return err
 	}
-
 	return nil
 }
 
@@ -121,18 +99,7 @@ func (s *ConfigurationScanSummaryStorage) GetList(ctx context.Context, key strin
 	// generate a single configurationScanSummary for the cluster, with a configuration scan summary for each namespace
 	nsSummaries := buildConfigurationScanSummaryForCluster(*workloadScanSummaryListObjPtr)
 
-	data, err := json.Marshal(nsSummaries)
-	if err != nil {
-		logger.L().Ctx(ctx).Error("json marshal failed", helpers.Error(err), helpers.String("key", key))
-		return err
-	}
-
-	if err = json.Unmarshal(data, listObj); err != nil {
-		logger.L().Ctx(ctx).Error("json unmarshal failed", helpers.Error(err), helpers.String("key", key))
-		return err
-	}
-
-	return nil
+	return marshalSummaryInto(ctx, nsSummaries, listObj, key)
 }
 
 // buildConfigurationScanSummaryForCluster generates a configuration scan summary list for the cluster, where each item is a configuration scan summary for a namespace

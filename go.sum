@@ -100,14 +100,10 @@ github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmV
 github.com/armon/go-metrics v0.3.10/go.mod h1:4O98XIr/9W0sxpJ8UaYkvjk10Iff7SnFrb4QAOwNTFc=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
 github.com/armon/go-radix v1.0.0/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
-github.com/armosec/armoapi-go v0.0.696 h1:+0Ll7y4oWNaKEO47qbGDFIQLxkSJeKYzylS0FwI84XE=
-github.com/armosec/armoapi-go v0.0.696/go.mod h1:9jAH0g8ZsryhiBDd/aNMX4+n10bGwTx/doWCyyjSxts=
 github.com/armosec/gojay v1.2.17 h1:VSkLBQzD1c2V+FMtlGFKqWXNsdNvIKygTKJI9ysY8eM=
 github.com/armosec/gojay v1.2.17/go.mod h1:vuvX3DlY0nbVrJ0qCklSS733AWMoQboq3cFyuQW9ybc=
 github.com/armosec/utils-go v0.0.58 h1:g9RnRkxZAmzTfPe2ruMo2OXSYLwVSegQSkSavOfmaIE=
 github.com/armosec/utils-go v0.0.58/go.mod h1:CdqKHKruVJMCxGcZXYW9J+5P9FZou8dMzVpcB0Xt8pk=
-github.com/armosec/utils-k8s-go v0.0.30 h1:Gj8MJck0jZPSLSq8ZMiRPT3F/laOYQdaLxXKKcjijt4=
-github.com/armosec/utils-k8s-go v0.0.30/go.mod h1:t0vvPJhYE+X+bOsaMsD2SzWU7WkJmV2Ltn9hg66AIe8=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/becheran/wildmatch-go v1.0.0 h1:mE3dGGkTmpKtT4Z+88t8RStG40yN9T+kFEGj2PZFSzA=
@@ -469,6 +465,10 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
+github.com/k8sstormcenter/armoapi-go v0.0.742 h1:AVME7dmgpgjGEnb3Nw8kzv2mTCKkkEU4tDN7dX+Fepg=
+github.com/k8sstormcenter/armoapi-go v0.0.742/go.mod h1:1l+70fBK09F7zI2jArrPUWVHaLkijg+sQutFTmE6HRs=
+github.com/k8sstormcenter/utils-k8s-go v0.0.35 h1:d5HvYzPJDmcrDxaEAxFEpxdy5NvVh3QJz//J3aOjyHA=
+github.com/k8sstormcenter/utils-k8s-go v0.0.35/go.mod h1:iHwR/KhMFtdd8Px1oYexLZYOHqmdknfGTZ8b7sZS0Ms=
 github.com/kinbiko/jsonassert v1.2.0 h1:+/JthIVXdIrThrOtSN9ry0mNtWKXMWuvxR0nU7gQ+tI=
 github.com/kinbiko/jsonassert v1.2.0/go.mod h1:pCc3uudOt+lVAbkji9O0uw8MSVt4s+1ZJ0y8Ux2F1Og=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
