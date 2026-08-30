@@ -54,7 +54,8 @@ type NetworkPort struct {
 	// gob flattens the pointer and omits zero values, so *0 decodes as nil
 	// (turning a user-authored port-0 literal into an any-port stanza).
 	// Internal-only; stamped on save, consumed on read, never converted out.
-	PortZero bool
+	// json:"-": gob carries it (gob ignores json tags); JSON views must not.
+	PortZero bool `json:"-"`
 }
 
 func (p NetworkPort) String() string {
