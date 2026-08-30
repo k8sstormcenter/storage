@@ -310,17 +310,18 @@ func (s *StorageImpl) takeConn(reqCtx context.Context) (*sqlite.Conn, func(), er
 }
 
 // gatedDeleteMetadata is the write-gated form of the read-path self-heal
-// deletes (missing/corrupt payload). Best-effort like before, but never
-// competing with another writer on the SQLite lock.
-func (s *StorageImpl) gatedDeleteMetadata(ctx context.Context, conn *sqlite.Conn, key string) {
-	if ctx == nil {
-		ctx = context.Background()
+// deletes (missing/corrupt payload). Best-effort: it heals only when metadata
+// actually exists for the key, and only if the gate is free RIGHT NOW — a
+// read path must never block on the gate (a gate holder synchronously waiting
+// on this read would circular-wait until both budgets die; observed live as
+// the consolidation livelock, one sacrificed key per maintenance cycle).
+func (s *StorageImpl) gatedDeleteMetadata(_ context.Context, conn *sqlite.Conn, key string) {
+	if _, err := ReadMetadata(conn, key); err != nil {
+		return // no metadata row — nothing to heal (plain miss, e.g. bootstrap Get)
 	}
-	gateCtx, cancel := context.WithTimeout(ctx, lockTimeout)
-	defer cancel()
-	releaseGate, err := gateForPool(s.pool).acquire(gateCtx, conn)
-	if err != nil {
-		return
+	releaseGate, ok := gateForPool(s.pool).tryAcquire(conn)
+	if !ok {
+		return // gate busy — skip; the next read retries the heal
 	}
 	defer releaseGate()
 	_ = DeleteMetadata(conn, key, nil)
