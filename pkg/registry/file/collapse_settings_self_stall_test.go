@@ -33,7 +33,7 @@ const (
 // waits a measurable, bounded time instead of DefaultBusyTimeout.
 func newSelfStallStorage(t *testing.T, processor Processor) *StorageImpl {
 	t.Helper()
-	pool := NewPool(filepath.Join(t.TempDir(), "selfstall.sq3"), 0, selfStallBusyTimeout)
+	pool := NewPool(filepath.Join(t.TempDir(), "selfstall.sq3"), 0)
 	// Pool.Close blocks until every connection is returned, which also joins
 	// any background refresh still holding one.
 	t.Cleanup(func() { _ = pool.Close() })
