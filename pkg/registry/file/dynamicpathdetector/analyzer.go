@@ -171,9 +171,9 @@ func (ua *PathAnalyzer) processSegments(node *SegmentNode, p string) string {
 		// node's children to ⋯ when Count > threshold.
 		insertThreshold := ua.effectiveThreshold(p[:start])
 		collapseThreshold := ua.effectiveThreshold(p[:i])
-		// A pid or tid is collapsed on sight, not on cardinality: see
-		// procIdentifierSegment.
-		if procIdentifierSegment(p[:start], segment) {
+		// Collapsed on sight rather than on cardinality: see
+		// procIdentifierSegment and generatedCounterSegment.
+		if procIdentifierSegment(p[:start], segment) || generatedCounterSegment(segment) {
 			segment = procIdentifierKey
 		}
 		currentNode = ua.processSegment(currentNode, segment, insertThreshold)
@@ -288,6 +288,30 @@ func procIdentifierSegment(prefix, segment string) bool {
 		return false
 	}
 	return isNumericSegment(segment) || segment == DynamicIdentifier
+}
+
+// generatedCounterSegment reports whether segment is a zero-padded counter —
+// a machine-generated sequence number, never a name a person chose.
+//
+// These are volatile in the way a tid is: the value advances every time and
+// never comes back, so a profile that records one records a path that can
+// never match again. Unlike a tid the cardinality threshold does eventually
+// reach them, but not before learning ends, and learning ends first for
+// exactly the workloads that produce them slowly. Observed in production:
+// nginx proxy_temp writes /tmp/nginx/proxy_temp/<n>/<nn>/0000000001, one file
+// landed inside the learning window, and the completed profile froze that
+// single literal while the running container went on to write 0000000002 and
+// beyond — paths its own allowlist can never match.
+//
+// The padding is what makes this safe to apply outside /proc, where a bare
+// integer is routinely meaningful. A StatefulSet ordinal is 0, 1, 2; a
+// container restart index is 0; a log rotation suffix is 1 or 2. None of them
+// is written 0000000001. Requiring a leading zero AND at least four digits
+// takes the generated sequence numbers and leaves every meaningful integer
+// alone — "0" and "007" stay literal.
+func generatedCounterSegment(segment string) bool {
+	const minCounterDigits = 4
+	return len(segment) >= minCounterDigits && segment[0] == '0' && isNumericSegment(segment)
 }
 
 func isNumericSegment(s string) bool {
