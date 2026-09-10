@@ -94,56 +94,40 @@ func TestProcNamesAreNotIdentifiers(t *testing.T) {
 	}
 }
 
-// The rule is anchored at the /proc root and at the task infix. A digit
-// somewhere else in the tree is ordinary data and stays literal until the
-// threshold says otherwise.
-func TestProcRuleIsAnchored(t *testing.T) {
+// The rule is anchored at the /proc root, and only there. Outside it an
+// integer is routinely meaningful — a StatefulSet ordinal, a restart index, a
+// rotation suffix — so it stays literal and the threshold decides.
+func TestProcRuleIsAnchoredAtTheRoot(t *testing.T) {
 	for _, path := range []string{
 		"/procfs/1234/status",   // prefix boundary, not /proc
 		"/var/proc/1234/status", // /proc not at the root
 		"/proc2/1234",
 		"/var/log/1234",
 		"/etc/1234/conf",
-		"/proc/1234/fd/3",       // fd numbers are out of scope, see below
-		"/proc/1234/tasks/5678", // "tasks", not "task"
-		"/proc/1234/task/5678/fd/3",
+		"/data/pods/0/restart/3",
 	} {
 		t.Run(path, func(t *testing.T) {
-			got := firstSight(t, path)
-			// Only a genuine /proc/<pid> may have been rewritten.
-			want := path
-			if len(path) > 6 && path[:6] == "/proc/" {
-				want = ""
-				seen := 0
-				for _, seg := range splitSegments(path) {
-					seen++
-					switch {
-					case seen == 2:
-						want += "/" + dynSeg
-					case seen == 4 && splitSegments(path)[2] == "task":
-						want += "/" + dynSeg
-					default:
-						want += "/" + seg
-					}
-				}
-			}
-			assert.Equal(t, want, got)
+			assert.Equal(t, path, firstSight(t, path), "collapsed a number outside /proc")
 		})
 	}
 }
 
-func splitSegments(p string) []string {
-	var out []string
-	cur := ""
-	for i := 1; i < len(p); i++ {
-		if p[i] == '/' {
-			out = append(out, cur)
-			cur = ""
-			continue
-		}
-		cur += string(p[i])
+// Under /proc, EVERY digits-only segment is an identifier — not just the pid
+// and the tid. A file descriptor, an fdinfo entry and an irq number are as
+// per-run as a tid, and none of them is worth a special case.
+func TestEveryIntegerUnderProcCollapses(t *testing.T) {
+	for _, tc := range []struct{ path, want string }{
+		{"/proc/1234/fd/3", "/proc/" + dynSeg + "/fd/" + dynSeg},
+		{"/proc/1234/fdinfo/7", "/proc/" + dynSeg + "/fdinfo/" + dynSeg},
+		{"/proc/1234/task/5678/fd/3", "/proc/" + dynSeg + "/task/" + dynSeg + "/fd/" + dynSeg},
+		{"/proc/irq/24/smp_affinity", "/proc/irq/" + dynSeg + "/smp_affinity"},
+		{"/proc/1234/tasks/5678", "/proc/" + dynSeg + "/tasks/" + dynSeg},
+		{"/proc/self/fd/9", "/proc/self/fd/" + dynSeg},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			assert.Equal(t, tc.want, firstSight(t, tc.path))
+		})
 	}
-	return append(out, cur)
 }
 
 // The failing case before the fix: a handful of threads, far below any
@@ -274,18 +258,19 @@ func TestWildcardedProcPrefixWins(t *testing.T) {
 	assert.Equal(t, "/proc/"+dp.WildcardIdentifier, again)
 }
 
-// Cardinality under the collapsed tid still has to accumulate normally — the
-// rule replaces the threshold for two segments, it does not disable it below.
-func TestThresholdStillAppliesBelowTheTid(t *testing.T) {
+// Named segments under /proc still accumulate and collapse on COUNT. The
+// structural rule takes the numbers; it does not switch the threshold off for
+// everything else at those levels.
+func TestThresholdStillAppliesToNamesUnderProc(t *testing.T) {
 	analyzer := dp.NewPathAnalyzer(3)
 	var last string
 	for i := 0; i < 10; i++ {
-		got, err := dp.AnalyzeOpen(fmt.Sprintf("/proc/1/task/1/fd/%d", i), analyzer)
+		got, err := dp.AnalyzeOpen(fmt.Sprintf("/proc/1/attr/name%d/current", i), analyzer)
 		require.NoError(t, err)
 		last = got
 	}
-	assert.Equal(t, "/proc/"+dynSeg+"/task/"+dynSeg+"/fd/"+dynSeg, last,
-		"fd numbers are out of the structural rule's scope and must still collapse on count")
+	assert.Equal(t, "/proc/"+dynSeg+"/attr/"+dynSeg+"/current", last,
+		"non-numeric siblings must still collapse once their count passes the threshold")
 }
 
 func BenchmarkAnalyzeProcTaskPath(b *testing.B) {

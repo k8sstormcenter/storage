@@ -252,48 +252,42 @@ func collapseAdjacentDynamic(buf []byte) []byte {
 // appears in a profile.
 const procIdentifierKey = "/pid"
 
-// procIdentifierSegment reports whether segment is the pid in /proc/<pid> or
-// the tid in /proc/<pid>/task/<tid>. prefix is the path up to and including
-// the '/' that precedes segment.
+// procIdentifierSegment reports whether segment is a kernel-assigned number in
+// a procfs path. prefix is the path up to and including the '/' that precedes
+// segment.
 //
-// Both numbers are kernel-assigned identifiers with no meaning beyond the
-// lifetime of the task that holds them, so they are collapsed structurally
-// rather than statistically. The threshold cannot do this job: collapse fires
-// on a node's child COUNT, and a container with a handful of threads never
-// produces enough distinct tids to reach it. Those tids then freeze into the
-// profile as literals, and because the next run of the same workload draws
-// different ones, every later open under /proc/<pid>/task/ is unprofiled.
+// The rule is deliberately blunt: ANY all-digit segment anywhere under /proc is
+// an identifier. A pid, a tid, a file descriptor, an fdinfo entry, an irq
+// number — none of them carries meaning past the run that produced it, and a
+// profile that records one records a path that can never match again.
 //
-// An already-collapsed ⋯ counts here too: the node agent rewrites /proc/<pid>
-// at report time, so the tid arrives under a ⋯ parent, and the ⋯ itself must
-// take the same route as a literal pid rather than the level-wide dynamic one.
+// An earlier version anchored this to /proc/<pid> and /proc/<pid>/task/<tid>
+// only. That is the case that hurts most, because the collapse threshold fires
+// on child COUNT and a container with a few threads never produces enough
+// distinct tids to reach it — but the anchoring bought nothing. There is no
+// all-digit segment under /proc whose exact value is worth keeping, so the
+// narrow rule was extra machinery guarding a distinction that does not exist.
 //
-// Nothing else qualifies. /proc/self, /proc/thread-self, /proc/net and every
-// other procfs name is a stable name, not an identifier, and stays literal —
-// including in the pid position of /proc/self/task/<tid>, where the tid alone
-// collapses.
+// The rule stops at /proc for a reason that does not apply below it. Outside
+// /proc an integer in a path is routinely meaningful — a StatefulSet ordinal,
+// a container restart index in a log path, a rotation suffix — and collapsing
+// those would merge paths an operator means to tell apart. There the threshold
+// is the right instrument, because it acts on observed cardinality rather than
+// on a guess about what the number means.
+//
+// An already-collapsed identifier counts too: the node agent rewrites
+// /proc/<pid> at report time, and storage re-analyses its own emitted patterns
+// on every save, so both arrive here carrying the dynamic identifier and must
+// take the same route as a literal number.
+//
+// Names are untouched. /proc/self, /proc/thread-self, /proc/net, /proc/sys and
+// every other procfs name has no digits-only segment and stays literal.
 func procIdentifierSegment(prefix, segment string) bool {
 	const procRoot = "/proc/"
 	if len(prefix) < len(procRoot) || prefix[:len(procRoot)] != procRoot {
 		return false
 	}
-	if !isNumericSegment(segment) && segment != DynamicIdentifier {
-		return false
-	}
-	if len(prefix) == len(procRoot) {
-		return true
-	}
-	const taskInfix = "/task/"
-	rest := prefix[len(procRoot):]
-	if !strings.HasSuffix(rest, taskInfix) {
-		return false
-	}
-	switch pid := rest[:len(rest)-len(taskInfix)]; pid {
-	case DynamicIdentifier, "self", "thread-self":
-		return true
-	default:
-		return isNumericSegment(pid)
-	}
+	return isNumericSegment(segment) || segment == DynamicIdentifier
 }
 
 func isNumericSegment(s string) bool {
