@@ -171,6 +171,11 @@ func (ua *PathAnalyzer) processSegments(node *SegmentNode, p string) string {
 		// node's children to ⋯ when Count > threshold.
 		insertThreshold := ua.effectiveThreshold(p[:start])
 		collapseThreshold := ua.effectiveThreshold(p[:i])
+		// A pid or tid is collapsed on sight, not on cardinality: see
+		// procIdentifierSegment.
+		if procIdentifierSegment(p[:start], segment) {
+			segment = procIdentifierKey
+		}
 		currentNode = ua.processSegment(currentNode, segment, insertThreshold)
 		ua.updateNodeStats(currentNode, collapseThreshold)
 		buf = append(buf, currentNode.SegmentName...)
@@ -234,6 +239,75 @@ func collapseAdjacentDynamic(buf []byte) []byte {
 	return buf[:out]
 }
 
+// procIdentifierKey is the trie key under which every pid and every tid at the
+// same level shares one subtree. It is deliberately NOT DynamicIdentifier: a ⋯
+// child makes the whole level dynamic (IsNextDynamic), which would route
+// /proc/self, /proc/cpuinfo and /proc/sys through it as well and cost the
+// profile the distinction between reading a named procfs file and walking a
+// task directory. The key can never collide with a real segment because
+// AnalyzePath splits on '/', so no segment can contain one.
+//
+// A node reached through this key still emits DynamicIdentifier — see
+// handleNewSegment — so the key is an internal routing detail and never
+// appears in a profile.
+const procIdentifierKey = "/pid"
+
+// procIdentifierSegment reports whether segment is the pid in /proc/<pid> or
+// the tid in /proc/<pid>/task/<tid>. prefix is the path up to and including
+// the '/' that precedes segment.
+//
+// Both numbers are kernel-assigned identifiers with no meaning beyond the
+// lifetime of the task that holds them, so they are collapsed structurally
+// rather than statistically. The threshold cannot do this job: collapse fires
+// on a node's child COUNT, and a container with a handful of threads never
+// produces enough distinct tids to reach it. Those tids then freeze into the
+// profile as literals, and because the next run of the same workload draws
+// different ones, every later open under /proc/<pid>/task/ is unprofiled.
+//
+// An already-collapsed ⋯ counts here too: the node agent rewrites /proc/<pid>
+// at report time, so the tid arrives under a ⋯ parent, and the ⋯ itself must
+// take the same route as a literal pid rather than the level-wide dynamic one.
+//
+// Nothing else qualifies. /proc/self, /proc/thread-self, /proc/net and every
+// other procfs name is a stable name, not an identifier, and stays literal —
+// including in the pid position of /proc/self/task/<tid>, where the tid alone
+// collapses.
+func procIdentifierSegment(prefix, segment string) bool {
+	const procRoot = "/proc/"
+	if len(prefix) < len(procRoot) || prefix[:len(procRoot)] != procRoot {
+		return false
+	}
+	if !isNumericSegment(segment) && segment != DynamicIdentifier {
+		return false
+	}
+	if len(prefix) == len(procRoot) {
+		return true
+	}
+	const taskInfix = "/task/"
+	rest := prefix[len(procRoot):]
+	if !strings.HasSuffix(rest, taskInfix) {
+		return false
+	}
+	switch pid := rest[:len(rest)-len(taskInfix)]; pid {
+	case DynamicIdentifier, "self", "thread-self":
+		return true
+	default:
+		return isNumericSegment(pid)
+	}
+}
+
+func isNumericSegment(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (ua *PathAnalyzer) processSegment(node *SegmentNode, segment string, threshold int) *SegmentNode {
 	if segment == DynamicIdentifier {
 		return ua.handleDynamicSegment(node)
@@ -268,8 +342,12 @@ func (ua *PathAnalyzer) processSegment(node *SegmentNode, segment string, thresh
 
 func (ua *PathAnalyzer) handleNewSegment(node *SegmentNode, segment string) *SegmentNode {
 	node.Count++
+	name := segment
+	if segment == procIdentifierKey {
+		name = DynamicIdentifier
+	}
 	newNode := &SegmentNode{
-		SegmentName: segment,
+		SegmentName: name,
 		Count:       0,
 		Children:    make(map[string]*SegmentNode),
 	}
@@ -387,7 +465,7 @@ func shallowChildrenCopy(src, dst *SegmentNode) {
 //     glob semantics. This avoids R0002 silently allowing access to a
 //     profiled directory's parent.
 //   - Unanchored `*` (no leading slash): explicit catch-all that also
-//     matches the root path `/`. The only way to whitelist `/` itself
+//     matches the root path `/`. The only way to allowlist `/` itself
 //     is an explicit unanchored `*`.
 //
 // Trailing-slash insensitivity: `/etc/` is treated as `/etc`, and
