@@ -961,6 +961,46 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*RogueArtifact)(nil), (*softwarecomposition.RogueArtifact)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_RogueArtifact_To_softwarecomposition_RogueArtifact(a.(*RogueArtifact), b.(*softwarecomposition.RogueArtifact), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*softwarecomposition.RogueArtifact)(nil), (*RogueArtifact)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_softwarecomposition_RogueArtifact_To_v1beta1_RogueArtifact(a.(*softwarecomposition.RogueArtifact), b.(*RogueArtifact), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*RogueArtifactList)(nil), (*softwarecomposition.RogueArtifactList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_RogueArtifactList_To_softwarecomposition_RogueArtifactList(a.(*RogueArtifactList), b.(*softwarecomposition.RogueArtifactList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*softwarecomposition.RogueArtifactList)(nil), (*RogueArtifactList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_softwarecomposition_RogueArtifactList_To_v1beta1_RogueArtifactList(a.(*softwarecomposition.RogueArtifactList), b.(*RogueArtifactList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*RogueArtifactSpec)(nil), (*softwarecomposition.RogueArtifactSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec(a.(*RogueArtifactSpec), b.(*softwarecomposition.RogueArtifactSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*softwarecomposition.RogueArtifactSpec)(nil), (*RogueArtifactSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec(a.(*softwarecomposition.RogueArtifactSpec), b.(*RogueArtifactSpec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*RogueArtifactStatus)(nil), (*softwarecomposition.RogueArtifactStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus(a.(*RogueArtifactStatus), b.(*softwarecomposition.RogueArtifactStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*softwarecomposition.RogueArtifactStatus)(nil), (*RogueArtifactStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus(a.(*softwarecomposition.RogueArtifactStatus), b.(*RogueArtifactStatus), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*RulePath)(nil), (*softwarecomposition.RulePath)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_RulePath_To_softwarecomposition_RulePath(a.(*RulePath), b.(*softwarecomposition.RulePath), scope)
 	}); err != nil {
@@ -2076,8 +2116,28 @@ func autoConvert_v1beta1_ContainerProfileContainer_To_softwarecomposition_Contai
 	out.ImageTag = in.ImageTag
 	out.PolicyByRuleId = *(*map[string]softwarecomposition.RulePolicy)(unsafe.Pointer(&in.PolicyByRuleId))
 	out.IdentifiedCallStacks = *(*[]softwarecomposition.IdentifiedCallStack)(unsafe.Pointer(&in.IdentifiedCallStacks))
-	out.Ingress = *(*[]softwarecomposition.NetworkNeighbor)(unsafe.Pointer(&in.Ingress))
-	out.Egress = *(*[]softwarecomposition.NetworkNeighbor)(unsafe.Pointer(&in.Egress))
+	if in.Ingress != nil {
+		in, out := &in.Ingress, &out.Ingress
+		*out = make([]softwarecomposition.NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ingress = nil
+	}
+	if in.Egress != nil {
+		in, out := &in.Egress, &out.Egress
+		*out = make([]softwarecomposition.NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Egress = nil
+	}
 	return nil
 }
 
@@ -2100,8 +2160,28 @@ func autoConvert_softwarecomposition_ContainerProfileContainer_To_v1beta1_Contai
 	out.ImageTag = in.ImageTag
 	out.PolicyByRuleId = *(*map[string]RulePolicy)(unsafe.Pointer(&in.PolicyByRuleId))
 	out.IdentifiedCallStacks = *(*[]IdentifiedCallStack)(unsafe.Pointer(&in.IdentifiedCallStacks))
-	out.Ingress = *(*[]NetworkNeighbor)(unsafe.Pointer(&in.Ingress))
-	out.Egress = *(*[]NetworkNeighbor)(unsafe.Pointer(&in.Egress))
+	if in.Ingress != nil {
+		in, out := &in.Ingress, &out.Ingress
+		*out = make([]NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ingress = nil
+	}
+	if in.Egress != nil {
+		in, out := &in.Egress, &out.Egress
+		*out = make([]NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Egress = nil
+	}
 	return nil
 }
 
@@ -2112,7 +2192,17 @@ func Convert_softwarecomposition_ContainerProfileContainer_To_v1beta1_ContainerP
 
 func autoConvert_v1beta1_ContainerProfileList_To_softwarecomposition_ContainerProfileList(in *ContainerProfileList, out *softwarecomposition.ContainerProfileList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]softwarecomposition.ContainerProfile)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]softwarecomposition.ContainerProfile, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_ContainerProfile_To_softwarecomposition_ContainerProfile(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -2123,7 +2213,17 @@ func Convert_v1beta1_ContainerProfileList_To_softwarecomposition_ContainerProfil
 
 func autoConvert_softwarecomposition_ContainerProfileList_To_v1beta1_ContainerProfileList(in *softwarecomposition.ContainerProfileList, out *ContainerProfileList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]ContainerProfile)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]ContainerProfile, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_ContainerProfile_To_v1beta1_ContainerProfile(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -2147,11 +2247,61 @@ func autoConvert_v1beta1_ContainerProfileSpec_To_softwarecomposition_ContainerPr
 	out.PolicyByRuleId = *(*map[string]softwarecomposition.RulePolicy)(unsafe.Pointer(&in.PolicyByRuleId))
 	out.IdentifiedCallStacks = *(*[]softwarecomposition.IdentifiedCallStack)(unsafe.Pointer(&in.IdentifiedCallStacks))
 	out.LabelSelector = in.LabelSelector
-	out.Ingress = *(*[]softwarecomposition.NetworkNeighbor)(unsafe.Pointer(&in.Ingress))
-	out.Egress = *(*[]softwarecomposition.NetworkNeighbor)(unsafe.Pointer(&in.Egress))
-	out.Containers = *(*[]softwarecomposition.ContainerProfileContainer)(unsafe.Pointer(&in.Containers))
-	out.InitContainers = *(*[]softwarecomposition.ContainerProfileContainer)(unsafe.Pointer(&in.InitContainers))
-	out.EphemeralContainers = *(*[]softwarecomposition.ContainerProfileContainer)(unsafe.Pointer(&in.EphemeralContainers))
+	if in.Ingress != nil {
+		in, out := &in.Ingress, &out.Ingress
+		*out = make([]softwarecomposition.NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ingress = nil
+	}
+	if in.Egress != nil {
+		in, out := &in.Egress, &out.Egress
+		*out = make([]softwarecomposition.NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Egress = nil
+	}
+	if in.Containers != nil {
+		in, out := &in.Containers, &out.Containers
+		*out = make([]softwarecomposition.ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_ContainerProfileContainer_To_softwarecomposition_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Containers = nil
+	}
+	if in.InitContainers != nil {
+		in, out := &in.InitContainers, &out.InitContainers
+		*out = make([]softwarecomposition.ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_ContainerProfileContainer_To_softwarecomposition_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.InitContainers = nil
+	}
+	if in.EphemeralContainers != nil {
+		in, out := &in.EphemeralContainers, &out.EphemeralContainers
+		*out = make([]softwarecomposition.ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_ContainerProfileContainer_To_softwarecomposition_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.EphemeralContainers = nil
+	}
 	return nil
 }
 
@@ -2175,11 +2325,61 @@ func autoConvert_softwarecomposition_ContainerProfileSpec_To_v1beta1_ContainerPr
 	out.PolicyByRuleId = *(*map[string]RulePolicy)(unsafe.Pointer(&in.PolicyByRuleId))
 	out.IdentifiedCallStacks = *(*[]IdentifiedCallStack)(unsafe.Pointer(&in.IdentifiedCallStacks))
 	out.LabelSelector = in.LabelSelector
-	out.Ingress = *(*[]NetworkNeighbor)(unsafe.Pointer(&in.Ingress))
-	out.Egress = *(*[]NetworkNeighbor)(unsafe.Pointer(&in.Egress))
-	out.Containers = *(*[]ContainerProfileContainer)(unsafe.Pointer(&in.Containers))
-	out.InitContainers = *(*[]ContainerProfileContainer)(unsafe.Pointer(&in.InitContainers))
-	out.EphemeralContainers = *(*[]ContainerProfileContainer)(unsafe.Pointer(&in.EphemeralContainers))
+	if in.Ingress != nil {
+		in, out := &in.Ingress, &out.Ingress
+		*out = make([]NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ingress = nil
+	}
+	if in.Egress != nil {
+		in, out := &in.Egress, &out.Egress
+		*out = make([]NetworkNeighbor, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Egress = nil
+	}
+	if in.Containers != nil {
+		in, out := &in.Containers, &out.Containers
+		*out = make([]ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_ContainerProfileContainer_To_v1beta1_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Containers = nil
+	}
+	if in.InitContainers != nil {
+		in, out := &in.InitContainers, &out.InitContainers
+		*out = make([]ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_ContainerProfileContainer_To_v1beta1_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.InitContainers = nil
+	}
+	if in.EphemeralContainers != nil {
+		in, out := &in.EphemeralContainers, &out.EphemeralContainers
+		*out = make([]ContainerProfileContainer, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_ContainerProfileContainer_To_v1beta1_ContainerProfileContainer(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.EphemeralContainers = nil
+	}
 	return nil
 }
 
@@ -3623,7 +3823,17 @@ func autoConvert_v1beta1_NetworkNeighbor_To_softwarecomposition_NetworkNeighbor(
 	out.Type = softwarecomposition.CommunicationType(in.Type)
 	out.DNS = in.DNS
 	out.DNSNames = *(*[]string)(unsafe.Pointer(&in.DNSNames))
-	out.Ports = *(*[]softwarecomposition.NetworkPort)(unsafe.Pointer(&in.Ports))
+	if in.Ports != nil {
+		in, out := &in.Ports, &out.Ports
+		*out = make([]softwarecomposition.NetworkPort, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta1_NetworkPort_To_softwarecomposition_NetworkPort(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ports = nil
+	}
 	out.PodSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.PodSelector))
 	out.NamespaceSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.IPAddress = in.IPAddress
@@ -3645,7 +3855,17 @@ func autoConvert_softwarecomposition_NetworkNeighbor_To_v1beta1_NetworkNeighbor(
 	out.Type = CommunicationType(in.Type)
 	out.DNS = in.DNS
 	out.DNSNames = *(*[]string)(unsafe.Pointer(&in.DNSNames))
-	out.Ports = *(*[]NetworkPort)(unsafe.Pointer(&in.Ports))
+	if in.Ports != nil {
+		in, out := &in.Ports, &out.Ports
+		*out = make([]NetworkPort, len(*in))
+		for i := range *in {
+			if err := Convert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Ports = nil
+	}
 	out.PodSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.PodSelector))
 	out.NamespaceSelector = (*metav1.LabelSelector)(unsafe.Pointer(in.NamespaceSelector))
 	out.IPAddress = in.IPAddress
@@ -3868,12 +4088,8 @@ func autoConvert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(in *soft
 	out.Name = in.Name
 	out.Protocol = Protocol(in.Protocol)
 	out.Port = (*int32)(unsafe.Pointer(in.Port))
+	// WARNING: in.PortZero requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort is an autogenerated conversion function.
-func Convert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(in *softwarecomposition.NetworkPort, out *NetworkPort, s conversion.Scope) error {
-	return autoConvert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(in, out, s)
 }
 
 func autoConvert_v1beta1_OpenCalls_To_softwarecomposition_OpenCalls(in *OpenCalls, out *softwarecomposition.OpenCalls, s conversion.Scope) error {
@@ -4116,6 +4332,124 @@ func autoConvert_softwarecomposition_ReportMeta_To_v1beta1_ReportMeta(in *softwa
 // Convert_softwarecomposition_ReportMeta_To_v1beta1_ReportMeta is an autogenerated conversion function.
 func Convert_softwarecomposition_ReportMeta_To_v1beta1_ReportMeta(in *softwarecomposition.ReportMeta, out *ReportMeta, s conversion.Scope) error {
 	return autoConvert_softwarecomposition_ReportMeta_To_v1beta1_ReportMeta(in, out, s)
+}
+
+func autoConvert_v1beta1_RogueArtifact_To_softwarecomposition_RogueArtifact(in *RogueArtifact, out *softwarecomposition.RogueArtifact, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1beta1_RogueArtifact_To_softwarecomposition_RogueArtifact is an autogenerated conversion function.
+func Convert_v1beta1_RogueArtifact_To_softwarecomposition_RogueArtifact(in *RogueArtifact, out *softwarecomposition.RogueArtifact, s conversion.Scope) error {
+	return autoConvert_v1beta1_RogueArtifact_To_softwarecomposition_RogueArtifact(in, out, s)
+}
+
+func autoConvert_softwarecomposition_RogueArtifact_To_v1beta1_RogueArtifact(in *softwarecomposition.RogueArtifact, out *RogueArtifact, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	if err := Convert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec(&in.Spec, &out.Spec, s); err != nil {
+		return err
+	}
+	if err := Convert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus(&in.Status, &out.Status, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_softwarecomposition_RogueArtifact_To_v1beta1_RogueArtifact is an autogenerated conversion function.
+func Convert_softwarecomposition_RogueArtifact_To_v1beta1_RogueArtifact(in *softwarecomposition.RogueArtifact, out *RogueArtifact, s conversion.Scope) error {
+	return autoConvert_softwarecomposition_RogueArtifact_To_v1beta1_RogueArtifact(in, out, s)
+}
+
+func autoConvert_v1beta1_RogueArtifactList_To_softwarecomposition_RogueArtifactList(in *RogueArtifactList, out *softwarecomposition.RogueArtifactList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]softwarecomposition.RogueArtifact)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1beta1_RogueArtifactList_To_softwarecomposition_RogueArtifactList is an autogenerated conversion function.
+func Convert_v1beta1_RogueArtifactList_To_softwarecomposition_RogueArtifactList(in *RogueArtifactList, out *softwarecomposition.RogueArtifactList, s conversion.Scope) error {
+	return autoConvert_v1beta1_RogueArtifactList_To_softwarecomposition_RogueArtifactList(in, out, s)
+}
+
+func autoConvert_softwarecomposition_RogueArtifactList_To_v1beta1_RogueArtifactList(in *softwarecomposition.RogueArtifactList, out *RogueArtifactList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]RogueArtifact)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_softwarecomposition_RogueArtifactList_To_v1beta1_RogueArtifactList is an autogenerated conversion function.
+func Convert_softwarecomposition_RogueArtifactList_To_v1beta1_RogueArtifactList(in *softwarecomposition.RogueArtifactList, out *RogueArtifactList, s conversion.Scope) error {
+	return autoConvert_softwarecomposition_RogueArtifactList_To_v1beta1_RogueArtifactList(in, out, s)
+}
+
+func autoConvert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec(in *RogueArtifactSpec, out *softwarecomposition.RogueArtifactSpec, s conversion.Scope) error {
+	out.State = in.State
+	out.Learning = in.Learning
+	out.Reason = in.Reason
+	out.WorkloadName = in.WorkloadName
+	out.WorkloadKind = in.WorkloadKind
+	out.WorkloadUID = in.WorkloadUID
+	out.ContainerName = in.ContainerName
+	out.ContainerID = in.ContainerID
+	out.PodName = in.PodName
+	out.PodUID = in.PodUID
+	out.NodeName = in.NodeName
+	return nil
+}
+
+// Convert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec is an autogenerated conversion function.
+func Convert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec(in *RogueArtifactSpec, out *softwarecomposition.RogueArtifactSpec, s conversion.Scope) error {
+	return autoConvert_v1beta1_RogueArtifactSpec_To_softwarecomposition_RogueArtifactSpec(in, out, s)
+}
+
+func autoConvert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec(in *softwarecomposition.RogueArtifactSpec, out *RogueArtifactSpec, s conversion.Scope) error {
+	out.State = in.State
+	out.Learning = in.Learning
+	out.Reason = in.Reason
+	out.WorkloadName = in.WorkloadName
+	out.WorkloadKind = in.WorkloadKind
+	out.WorkloadUID = in.WorkloadUID
+	out.ContainerName = in.ContainerName
+	out.ContainerID = in.ContainerID
+	out.PodName = in.PodName
+	out.PodUID = in.PodUID
+	out.NodeName = in.NodeName
+	return nil
+}
+
+// Convert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec is an autogenerated conversion function.
+func Convert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec(in *softwarecomposition.RogueArtifactSpec, out *RogueArtifactSpec, s conversion.Scope) error {
+	return autoConvert_softwarecomposition_RogueArtifactSpec_To_v1beta1_RogueArtifactSpec(in, out, s)
+}
+
+func autoConvert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus(in *RogueArtifactStatus, out *softwarecomposition.RogueArtifactStatus, s conversion.Scope) error {
+	out.Phase = in.Phase
+	out.FiredAt = in.FiredAt
+	out.HealedAt = in.HealedAt
+	return nil
+}
+
+// Convert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus is an autogenerated conversion function.
+func Convert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus(in *RogueArtifactStatus, out *softwarecomposition.RogueArtifactStatus, s conversion.Scope) error {
+	return autoConvert_v1beta1_RogueArtifactStatus_To_softwarecomposition_RogueArtifactStatus(in, out, s)
+}
+
+func autoConvert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus(in *softwarecomposition.RogueArtifactStatus, out *RogueArtifactStatus, s conversion.Scope) error {
+	out.Phase = in.Phase
+	out.FiredAt = in.FiredAt
+	out.HealedAt = in.HealedAt
+	return nil
+}
+
+// Convert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus is an autogenerated conversion function.
+func Convert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus(in *softwarecomposition.RogueArtifactStatus, out *RogueArtifactStatus, s conversion.Scope) error {
+	return autoConvert_softwarecomposition_RogueArtifactStatus_To_v1beta1_RogueArtifactStatus(in, out, s)
 }
 
 func autoConvert_v1beta1_RulePath_To_softwarecomposition_RulePath(in *RulePath, out *softwarecomposition.RulePath, s conversion.Scope) error {

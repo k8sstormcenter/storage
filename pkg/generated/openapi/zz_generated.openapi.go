@@ -125,6 +125,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.PolicyRef{}.OpenAPIModelName():                                  schema_pkg_apis_softwarecomposition_v1beta1_PolicyRef(ref),
 		v1beta1.Product{}.OpenAPIModelName():                                    schema_pkg_apis_softwarecomposition_v1beta1_Product(ref),
 		v1beta1.ReportMeta{}.OpenAPIModelName():                                 schema_pkg_apis_softwarecomposition_v1beta1_ReportMeta(ref),
+		v1beta1.RogueArtifact{}.OpenAPIModelName():                              schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifact(ref),
+		v1beta1.RogueArtifactList{}.OpenAPIModelName():                          schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactList(ref),
+		v1beta1.RogueArtifactSpec{}.OpenAPIModelName():                          schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactSpec(ref),
+		v1beta1.RogueArtifactStatus{}.OpenAPIModelName():                        schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactStatus(ref),
 		v1beta1.RulePath{}.OpenAPIModelName():                                   schema_pkg_apis_softwarecomposition_v1beta1_RulePath(ref),
 		v1beta1.RulePolicy{}.OpenAPIModelName():                                 schema_pkg_apis_softwarecomposition_v1beta1_RulePolicy(ref),
 		v1beta1.RuleStatus{}.OpenAPIModelName():                                 schema_pkg_apis_softwarecomposition_v1beta1_RuleStatus(ref),
@@ -2515,8 +2519,9 @@ func schema_pkg_apis_softwarecomposition_v1beta1_IgnoreRule(ref common.Reference
 					},
 					"sourceKind": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "SourceKind, SourceName and SourceNamespace identify the object that caused this suppression (e.g. \"SecurityException\", its name, and namespace for a namespaced object).",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"sourceName": {
@@ -2533,8 +2538,9 @@ func schema_pkg_apis_softwarecomposition_v1beta1_IgnoreRule(ref common.Reference
 					},
 					"justification": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Justification and ImpactStatement carry the stated reason for the suppression, in VEX vocabulary.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"impactStatement": {
@@ -3887,7 +3893,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_NetworkNeighbor(ref common.Refe
 					},
 					"serviceRefNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceRefNamespace and ServiceRefName reference a single Service, resolved per-cluster to its ClusterIP(s) and endpoint IPs.",
+							Description: "ServiceRefNamespace and ServiceRefName reference a single Service; the resolver expands it to that Service's ClusterIP(s) and backing endpoint IPs. Portable (a name, resolved per-cluster) and narrow, unlike a serviceCIDR ipAddresses entry. See k8sstormcenter/node-agent#92.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3906,7 +3912,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_NetworkNeighbor(ref common.Refe
 					},
 					"entity": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Entity is a reserved peer identity not backed by a Service object. Supported value: \"host\".",
+							Description: "Entity is a reserved peer identity not backed by a Service object. Supported value: \"host\" (node InternalIP + CNI gateway) — kubelet/health probes and node-sourced traffic.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4738,6 +4744,209 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ReportMeta(ref common.Reference
 					},
 				},
 				Required: []string{"createdAt"},
+			},
+		},
+		Dependencies: []string{
+			v1.Time{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifact(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RogueArtifact is the in-cluster, discoverable record of a container that is not covered by a verified authored profile. One object per firing container.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1beta1.RogueArtifactSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1beta1.RogueArtifactStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.RogueArtifactSpec{}.OpenAPIModelName(), v1beta1.RogueArtifactStatus{}.OpenAPIModelName(), v1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1beta1.RogueArtifact{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			v1beta1.RogueArtifact{}.OpenAPIModelName(), v1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"learning": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"workloadName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"workloadKind": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"workloadUID": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"containerName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"containerID": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"podName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"podUID": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"nodeName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_softwarecomposition_v1beta1_RogueArtifactStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"firedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+					"healedAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref(v1.Time{}.OpenAPIModelName()),
+						},
+					},
+				},
 			},
 		},
 		Dependencies: []string{

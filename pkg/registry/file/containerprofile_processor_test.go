@@ -579,3 +579,57 @@ func TestUpdateProfileStatusExpiredFull(t *testing.T) {
 	assert.Equal(t, helpersv1.Completed, profile.Annotations[helpersv1.StatusMetadataKey])
 	assert.Equal(t, helpersv1.Full, profile.Annotations[helpersv1.CompletionMetadataKey])
 }
+
+// TestConsolidate_StatusTransitionPersistsWithoutNewData pins the
+// persist-on-transition contract: a maintenance pass that changes the
+// profile's lifecycle status while merging NO new part data (the expired /
+// late-finalization passes) must still save the consolidated profile.
+// Gating the save on new data alone dropped the in-memory transition after
+// the time-series rows were already cleared — the served profile then stayed
+// 'ready' forever with nothing left to consolidate.
+func TestConsolidate_StatusTransitionPersistsWithoutNewData(t *testing.T) {
+	pool := NewTestPool(t.TempDir())
+	require.NotNil(t, pool)
+	defer func() { _ = pool.Close() }()
+	sch := scheme.Scheme
+	require.NoError(t, softwarecomposition.AddToScheme(sch))
+	processor := ContainerProfileProcessor{
+		DeleteThreshold:         50 * time.Millisecond,
+		MaxContainerProfileSize: 40000,
+	}
+	s := &StorageImpl{
+		appFs:           afero.NewMemMapFs(),
+		pool:            pool,
+		locks:           utils.NewMapMutex[string](),
+		processor:       &processor,
+		root:            DefaultStorageRoot,
+		scheme:          sch,
+		versioner:       storage.APIObjectVersioner{},
+		watchDispatcher: NewWatchDispatcher(),
+	}
+	processor.SetStorage(NewContainerProfileStorageImpl(s, pool))
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancel()
+
+	content, err := os.ReadFile("testdata/p1.json")
+	require.NoError(t, err)
+	var part softwarecomposition.ContainerProfile
+	require.NoError(t, json.Unmarshal(content, &part))
+	require.NoError(t, s.Create(ctx, "/spdx.softwarecomposition.kubescape.io/containerprofile/"+part.Namespace+"/"+part.Name, &part, nil, 0))
+
+	// Pass 1: merges the part (new data), profile saved in learning state.
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+
+	// Let the series expire, then run a pass with NO new part data: the
+	// expired finalization transitions the status to Completed/Partial.
+	time.Sleep(80 * time.Millisecond)
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+
+	got := softwarecomposition.ContainerProfile{}
+	key := "/spdx.softwarecomposition.kubescape.io/containerprofile/kube-system/replicaset-coredns-5d78c9869d-coredns-185f-129c"
+	require.NoError(t, s.Get(ctx, key, storage.GetOptions{}, &got))
+	assert.Equal(t, "completed", got.Annotations["kubescape.io/status"],
+		"a no-new-data finalization pass must persist the status transition")
+	assert.Equal(t, "partial", got.Annotations["kubescape.io/completion"])
+}

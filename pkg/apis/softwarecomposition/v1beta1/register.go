@@ -62,6 +62,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&VulnerabilitySummary{},
 		&VulnerabilitySummaryList{},
 		&ContainerProfile{},
+		&RogueArtifact{},
+		&RogueArtifactList{},
 		&ContainerProfileList{},
 		&OpenVulnerabilityExchangeContainer{},
 		&OpenVulnerabilityExchangeContainerList{},
