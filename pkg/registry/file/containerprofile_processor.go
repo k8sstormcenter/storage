@@ -30,6 +30,8 @@ import (
 	"zombiezen.com/go/sqlite"
 )
 
+const TimelineMetadataKey = "kubescape.io/timeline"
+
 // ConsolidatedSlugData contains the slug (name) and namespace of a consolidated profile
 type ConsolidatedSlugData struct {
 	Name      string
@@ -963,7 +965,11 @@ func mergeContainerProfileTS(profile, tsProfile *softwarecomposition.ContainerPr
 	// merge annotations
 	profile.Annotations = utils.MergeMaps(profile.Annotations, tsProfile.Annotations,
 		helpers.CompletionMetadataKey, helpers.PreviousReportTimestampMetadataKey,
-		helpers.ReportSeriesIdMetadataKey, helpers.ReportTimestampMetadataKey, helpers.StatusMetadataKey)
+		helpers.ReportSeriesIdMetadataKey, helpers.ReportTimestampMetadataKey, helpers.StatusMetadataKey,
+		TimelineMetadataKey)
+	if v := newerTimeline(profile.Annotations[TimelineMetadataKey], tsProfile.Annotations[TimelineMetadataKey]); v != "" {
+		profile.Annotations[TimelineMetadataKey] = v
+	}
 	// merge labels
 	profile.Labels = utils.MergeMaps(profile.Labels, tsProfile.Labels)
 	// merge spec
@@ -1031,4 +1037,38 @@ func isKeyNotFoundErr(err error) bool {
 		}
 	}
 	return storage.IsNotFound(err) || strings.Contains(err.Error(), "key not found")
+}
+
+func timelineEnd(v string) (time.Time, bool) {
+	entry := v[strings.LastIndexByte(v, ',')+1:]
+	at := strings.LastIndexByte(entry, '@')
+	if at < 0 {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, entry[at+1:])
+	return t, err == nil
+}
+
+func newerTimeline(existing, incoming string) string {
+	if incoming == "" {
+		return existing
+	}
+	if existing == "" {
+		return incoming
+	}
+	et, eok := timelineEnd(existing)
+	it, iok := timelineEnd(incoming)
+	switch {
+	case !iok:
+		return existing
+	case !eok:
+		return incoming
+	case it.After(et):
+		return incoming
+	case et.After(it):
+		return existing
+	case len(incoming) > len(existing):
+		return incoming
+	}
+	return existing
 }
