@@ -200,8 +200,7 @@ func (h *KubernetesAPI) fetchDataFromPods(ns string, resourceMaps *ResourceMaps)
 		}
 
 		// we don't care about the cluster name, so we remove it to avoid corner cases
-		wlid := wlidPkg.GetK8sWLID("", pod.Namespace, pod.Kind, pod.Name)
-		wlid = wlidWithoutClusterName(wlid)
+		wlid := runningPodWlid(pod)
 
 		containerNames := mapset.NewSet[string]()
 		resourceMaps.RunningWlidsToContainerNames.Set(wlid, containerNames)
@@ -227,4 +226,8 @@ func (h *KubernetesAPI) fetchDataFromPods(ns string, resourceMaps *ResourceMaps)
 		return err
 	}
 	return nil
+}
+
+func runningPodWlid(pod *corev1.Pod) string {
+	return wlidWithoutClusterName(wlidPkg.GetK8sWLID("", pod.Namespace, "Pod", pod.Name))
 }
