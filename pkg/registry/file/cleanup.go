@@ -190,7 +190,7 @@ func (h *ResourcesCleanupHandler) cleanupNamespace(ctx context.Context, ns strin
 			}
 
 			// Skip user-managed resources (e.g., user-defined profiles).
-			if isUserManaged(metadata) {
+			if isUserManaged(metadata) || isShadowProfile(metadata) {
 				return nil
 			}
 
@@ -230,6 +230,13 @@ func (h *ResourcesCleanupHandler) cleanupNamespace(ctx context.Context, ns strin
 // networkpolicy.go for the canonical read-site) — NOT on Labels.
 // Reading from Labels would silently miss every user-managed resource
 // and defeat the cleanup skip entirely.
+func isShadowProfile(metadata *metav1.ObjectMeta) bool {
+	if metadata == nil {
+		return false
+	}
+	return metadata.Labels["kubescape.io/profile-role"] == "shadow"
+}
+
 func isUserManaged(metadata *metav1.ObjectMeta) bool {
 	if metadata == nil {
 		return false
