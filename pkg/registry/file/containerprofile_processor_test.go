@@ -639,3 +639,64 @@ func TestConsolidate_ExpiredSeriesKeepsLearning(t *testing.T) {
 	assert.Equal(t, "ready", got.Annotations["kubescape.io/status"])
 	assert.NotEqual(t, rvAfterExpiry, got.ResourceVersion)
 }
+
+func TestUpdateProfileStatusFinalChunkKeepsLearning(t *testing.T) {
+	mockStorage := &mockContainerProfileStorage{}
+	processor := ContainerProfileProcessor{ContainerProfileStorage: mockStorage}
+	for _, status := range []string{helpersv1.Completed, helpersv1.Failed} {
+		profile := &softwarecomposition.ContainerProfile{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+			helpersv1.StatusMetadataKey:     helpersv1.Completed,
+			helpersv1.CompletionMetadataKey: helpersv1.Full,
+		}}}
+		ts := []softwarecomposition.TimeSeriesContainers{{
+			Status:                  status,
+			Completion:              helpersv1.Full,
+			TsSuffix:                "123",
+			PreviousReportTimestamp: "0001-01-01 00:00:00 +0000 UTC",
+		}}
+		res, skip, err := processor.updateProfileStatus(context.TODO(), "k", "s", profile, ts, false)
+		assert.NoError(t, err)
+		assert.False(t, skip, status)
+		assert.Len(t, res, 0, status)
+		assert.False(t, mockStorage.deleteCalled, status)
+		assert.Equal(t, helpersv1.Learning, profile.Annotations[helpersv1.StatusMetadataKey], status)
+		assert.Equal(t, helpersv1.Full, profile.Annotations[helpersv1.CompletionMetadataKey], status)
+	}
+}
+
+func TestPreSaveAcceptsChunkForCompletedProfile(t *testing.T) {
+	pool := NewTestPool(t.TempDir())
+	require.NotNil(t, pool)
+	defer func() { _ = pool.Close() }()
+	sch := scheme.Scheme
+	require.NoError(t, softwarecomposition.AddToScheme(sch))
+	processor := ContainerProfileProcessor{MaxContainerProfileSize: 40000}
+	s := &StorageImpl{
+		appFs:           afero.NewMemMapFs(),
+		pool:            pool,
+		locks:           utils.NewMapMutex[string](),
+		processor:       &processor,
+		root:            DefaultStorageRoot,
+		scheme:          sch,
+		versioner:       storage.APIObjectVersioner{},
+		watchDispatcher: NewWatchDispatcher(),
+	}
+	processor.SetStorage(NewContainerProfileStorageImpl(s, pool))
+	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancel()
+
+	content, err := os.ReadFile("testdata/p1.json")
+	require.NoError(t, err)
+	var part softwarecomposition.ContainerProfile
+	require.NoError(t, json.Unmarshal(content, &part))
+	key := "/spdx.softwarecomposition.kubescape.io/containerprofile/kube-system/replicaset-coredns-5d78c9869d-coredns-185f-129c"
+	done := newGuardProfile("kube-system", "replicaset-coredns-5d78c9869d-coredns-185f-129c", helpersv1.Completed)
+	done.Annotations[helpersv1.CompletionMetadataKey] = helpersv1.Full
+	require.NoError(t, s.Create(ctx, key, done, &softwarecomposition.ContainerProfile{}, 0))
+
+	require.NoError(t, s.Create(ctx, "/spdx.softwarecomposition.kubescape.io/containerprofile/"+part.Namespace+"/"+part.Name, &part, nil, 0))
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+	got := softwarecomposition.ContainerProfile{}
+	require.NoError(t, s.Get(ctx, key, storage.GetOptions{}, &got))
+	assert.Equal(t, helpersv1.Learning, got.Annotations[helpersv1.StatusMetadataKey])
+}
