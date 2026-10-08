@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,6 +27,7 @@ func TestLoadConfig(t *testing.T) {
 				HostType:                armotypes.HostTypeKubernetes,
 				ExcludeJsonPaths:        []string{".containers[*].env[?(@.name==\"KUBECONFIG\")]"},
 				MaxContainerProfileSize: 40000,
+				MaxSniffingTime:         24 * time.Hour,
 				RateLimitTotal:          10,
 				ServerBindAddress:       "::",
 				ServerBindPort:          8443,
@@ -151,4 +153,17 @@ func TestHostTypeValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadConfig_MaxSniffingTimeDefaultEnablesExpiry(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(dir+"/config.json", []byte(`{}`), 0644))
+	cfg, err := LoadConfig(dir)
+	require.NoError(t, err)
+	assert.Equal(t, 24*time.Hour, cfg.MaxSniffingTime)
+
+	require.NoError(t, os.WriteFile(dir+"/config.json", []byte(`{"maxSniffingTimePerContainer": "2h"}`), 0644))
+	cfg, err = LoadConfig(dir)
+	require.NoError(t, err)
+	assert.Equal(t, 2*time.Hour, cfg.MaxSniffingTime)
 }
