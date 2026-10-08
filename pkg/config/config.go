@@ -54,6 +54,7 @@ func LoadConfig(path string) (Config, error) {
 	v.SetDefault("cleanupInterval", 24*time.Hour)
 	v.SetDefault("defaultNamespace", "kubescape")
 	v.SetDefault("maxContainerProfileSize", 40000)
+	v.SetDefault("maxSniffingTimePerContainer", 24*time.Hour)
 	v.SetDefault("rateLimitTotal", 10)
 	v.SetDefault("serverBindAddress", "::")
 	v.SetDefault("serverBindPort", 8443)
