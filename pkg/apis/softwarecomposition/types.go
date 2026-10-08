@@ -301,40 +301,9 @@ type TimeSeriesContainers struct {
 	TsSuffix                string
 }
 
-// SetCompletedStatus marks the profile as 'Completed'. The completion state ('Full' or 'Partial') is inherited
-// from the provided timeseries data.
-// It includes a safeguard to prevent any changes if the profile is already 'Completed' and 'Full'.
-// It returns true if the profile's final state is 'Completed' and 'Full'.
-func (p *ContainerProfile) SetCompletedStatus(ts TimeSeriesContainers) bool {
-	// safeguard: never change a completed full profile
-	if p.Annotations[helpers.StatusMetadataKey] == helpers.Completed && p.Annotations[helpers.CompletionMetadataKey] == helpers.Full {
-		return true
-	}
-	p.Annotations[helpers.StatusMetadataKey] = helpers.Completed
-	p.Annotations[helpers.CompletionMetadataKey] = ts.Completion
-	return p.Annotations[helpers.CompletionMetadataKey] == helpers.Full
-}
-
-// SetFailedStatus marks the profile as 'Completed' and 'Partial', a terminal state for profiles that failed processing.
-// It includes a safeguard to prevent any changes if the profile is already 'Completed' and 'Full'.
-func (p *ContainerProfile) SetFailedStatus(_ TimeSeriesContainers) {
-	// safeguard: never change a completed full profile
-	if p.Annotations[helpers.StatusMetadataKey] == helpers.Completed && p.Annotations[helpers.CompletionMetadataKey] == helpers.Full {
-		return
-	}
-	// failed is always completed partial
-	p.Annotations[helpers.StatusMetadataKey] = helpers.Completed
-	p.Annotations[helpers.CompletionMetadataKey] = helpers.Partial
-}
-
-// SetLearningStatus marks the profile as 'Learning'.
+// SetLearningStatus marks the profile as 'Learning'; profiles never stop learning.
 // The completion state is updated from the timeseries data, but it will not downgrade a profile that is already 'Full'.
-// It includes a safeguard to prevent any changes if the profile is already 'Completed' and 'Full'.
 func (p *ContainerProfile) SetLearningStatus(ts TimeSeriesContainers) {
-	// safeguard: never change a completed profile back to learning
-	if p.Annotations[helpers.StatusMetadataKey] == helpers.Completed {
-		return
-	}
 	p.Annotations[helpers.StatusMetadataKey] = helpers.Learning
 	// don't change completion if already full
 	if p.Annotations[helpers.CompletionMetadataKey] != helpers.Full {

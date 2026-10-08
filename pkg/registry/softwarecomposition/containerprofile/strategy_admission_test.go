@@ -1,7 +1,7 @@
 package containerprofile
 
 // Admission-boundary tests for the restored ContainerProfile strategy
-// behaviour: completed-profile immutability, complete->partial transition
+// behaviour: complete->partial transition
 // rejection, and network entry grammar validation. The deleted
 // ApplicationProfile/NetworkNeighborhood strategies enforced these contracts;
 // their removal left Validate/ValidateUpdate/PrepareForUpdate as no-ops.
@@ -34,26 +34,9 @@ func completedProfile() *softwarecomposition.ContainerProfile {
 	}
 }
 
-func TestPrepareForUpdate_CompletedProfileIsImmutable(t *testing.T) {
-	s := NewStrategy(nil)
-	old := completedProfile()
-
-	updated := old.DeepCopy()
-	updated.Spec.Syscalls = append(updated.Spec.Syscalls, "ptrace")
-	updated.Labels = map[string]string{"tampered": "yes"}
-
-	s.PrepareForUpdate(context.TODO(), updated, old)
-
-	assert.Equal(t, old, updated,
-		"an update to a completed profile must be reset to the stored object")
-}
-
 func TestPrepareForUpdate_CompleteToPartialRejected(t *testing.T) {
 	s := NewStrategy(nil)
 	old := completedProfile()
-	// Only the completion annotation is Full; status differs so the
-	// completed-immutability guard does not trigger and the transition
-	// guard is exercised on its own.
 	old.Annotations[helpers.StatusMetadataKey] = helpers.Learning
 
 	updated := old.DeepCopy()

@@ -14,25 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/storage"
 )
 
-// TestPreSave_CompletedImmutability_RealGuaranteedUpdate drives the consolidated
-// completed-immutability guard through the REAL StorageImpl.GuaranteedUpdate and a
-// REAL SQLite pool, rather than a fake whose metadata read aliases the locking
-// read. GuaranteedUpdate holds the per-key write lock while it invokes
-// processor.PreSave; the guard therefore MUST read stored metadata through the
-// no-lock variant (GetContainerProfileMetadataNoLock). If it used the locking
-// read it would block on the write lock it is nested inside until the lock
-// timeout, the guard would be skipped, and a Completed profile could regress to
-// Learning. This test proves the guard reverts the regression without deadlock.
-//
-// The stored-TooLarge case pins the orthogonal GuaranteedUpdate short-circuit:
-// a stored TooLarge profile is immutable, so an incoming patch is dropped
-// entirely (never even reaching the consolidated guard) and the stored status
-// stays TooLarge.
-func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
+// TestPreSave_CompletedReopens_RealGuaranteedUpdate: a stored Completed profile
+// reopens to learning through the real GuaranteedUpdate path; a stored TooLarge
+// profile still short-circuits the update.
+func TestPreSave_CompletedReopens_RealGuaranteedUpdate(t *testing.T) {
 	const (
 		ns   = "kubescape"
 		name = "replicaset-nginx-abc123-nginx-1a2b-3c4d"
@@ -45,10 +34,10 @@ func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
 		wantStatus   string
 	}{
 		{
-			name:         "stored Completed cannot regress to Learning",
+			name:         "stored Completed reopens to Learning",
 			storedStatus: helpersv1.Completed,
 			incoming:     helpersv1.Learning,
-			wantStatus:   helpersv1.Completed, // reverted by the no-lock guard
+			wantStatus:   helpersv1.Learning,
 		},
 		{
 			name:         "stored TooLarge is immutable, patch dropped",
@@ -62,9 +51,6 @@ func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s, key := newGuardTestStorage(t, ns, name)
 
-			// A per-test timeout: were the guard to take the locking read, RLock
-			// on the write-locked key would block for lockTimeout and this bounds
-			// the failure instead of hanging the suite forever.
 			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 			defer cancel()
 
@@ -72,8 +58,6 @@ func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
 			seed := newGuardProfile(ns, name, tt.storedStatus)
 			require.NoError(t, s.Create(ctx, key, seed, &softwarecomposition.ContainerProfile{}, 0))
 
-			// Patch it with an incoming status via the real GuaranteedUpdate path,
-			// which acquires the write lock and calls processor.PreSave under it.
 			out := &softwarecomposition.ContainerProfile{}
 			done := make(chan error, 1)
 			go func() {
@@ -92,7 +76,7 @@ func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
 			case err := <-done:
 				require.NoError(t, err, "GuaranteedUpdate must not error")
 			case <-time.After(20 * time.Second):
-				t.Fatal("GuaranteedUpdate deadlocked - the guard likely used the locking metadata read inside the held write lock")
+				t.Fatal("GuaranteedUpdate deadlocked")
 			}
 
 			// Read the persisted profile back and assert its status.
@@ -106,7 +90,7 @@ func TestPreSave_CompletedImmutability_RealGuaranteedUpdate(t *testing.T) {
 
 // newGuardTestStorage builds a StorageImpl backed by a real SQLite pool and a
 // real ContainerProfileProcessor (HostType Kubernetes), and returns the storage
-// plus the consolidated key the processor's guard derives for (ns, name).
+// plus the consolidated key for (ns, name).
 func newGuardTestStorage(t *testing.T, ns, name string) (StorageQuerier, string) {
 	t.Helper()
 	pool := NewTestPool(t.TempDir())

@@ -17,7 +17,6 @@ import (
 
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition"
 	"github.com/kubescape/storage/pkg/registry/file/networkmatch"
-	"github.com/kubescape/storage/pkg/registry/softwarecomposition/common"
 	"github.com/kubescape/storage/pkg/utils"
 )
 
@@ -65,19 +64,6 @@ func (ContainerProfileStrategy) PrepareForCreate(_ context.Context, _ runtime.Ob
 func (ContainerProfileStrategy) PrepareForUpdate(_ context.Context, obj, old runtime.Object) {
 	newCP := obj.(*softwarecomposition.ContainerProfile)
 	oldCP := old.(*softwarecomposition.ContainerProfile)
-
-	// A container profile that is marked as completed is immutable: reset any
-	// incoming update to the stored object. (User-authored profiles carry no
-	// lifecycle annotations, so they are never caught by this guard and stay
-	// editable.) The deleted ApplicationProfile/NetworkNeighborhood strategies
-	// enforced the same contract at this boundary.
-	if common.IsComplete(oldCP.Annotations, newCP.Annotations) {
-		logger.L().Debug("container profile is marked as completed, rejecting update",
-			logHelpers.String("name", oldCP.Name),
-			logHelpers.String("namespace", oldCP.Namespace))
-		*newCP = *oldCP // reset the new object to the old object
-		return
-	}
 
 	// completion status cannot be transitioned from 'complete' -> 'partial'
 	// in such case, we reject status updates

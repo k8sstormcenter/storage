@@ -159,64 +159,10 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 		if err != nil {
 			return nil
 		}
-		existingStatus := existingProfile.Annotations[helpers.StatusMetadataKey]
-		if existingStatus == helpers.TooLarge {
-			// reject TS profile if the existing profile is too large
+		if existingProfile.Annotations[helpers.StatusMetadataKey] == helpers.TooLarge {
 			return ObjectTooLargeError
-		} else if existingStatus == helpers.Completed {
-			// reject TS profile if the existing profile is already completed and full
-			// if the existing profile is completed and partial, we let complete TS profile amend it until it is full
-			if existingProfile.Annotations[helpers.CompletionMetadataKey] == helpers.Full || profile.Annotations[helpers.CompletionMetadataKey] == helpers.Partial {
-				return ObjectCompletedError
-			}
 		}
 		return nil
-
-	}
-
-	// Consolidated (non-TS) profile path: enforce completed-immutability.
-	// A direct patch of the consolidated ContainerProfile carries no
-	// ReportSeriesId, so it skips the TS branch above. If the stored
-	// consolidated profile is already Completed, a regression of the incoming
-	// status back to Learning/Ready (helpers.Learning == "ready") must be
-	// reverted so the profile cannot leave the completed state. The update
-	// still proceeds (no error) with the reverted status. A Completed->Completed
-	// amendment (partial->full completion) and TooLarge handling are left
-	// untouched.
-	{
-		id := armotypes.ProfileIdentifier{
-			ProfileScope: armotypes.ProfileScope{
-				HostType:               a.HostType,
-				Cluster:                profile.Annotations[helpers.ClusterMetadataKey],
-				Namespace:              profile.Namespace,
-				CloudAccountIdentifier: profile.Annotations[helpers.CloudAccountIdentifierMetadataKey],
-				Region:                 profile.Annotations[helpers.RegionMetadataKey],
-				HostID:                 profile.Annotations[helpers.HostIDMetadataKey],
-			},
-			Name: profile.Name,
-		}
-		key := BuildContainerProfileKey(id, "containerprofile")
-		// Use the no-lock metadata read: PreSave is invoked from within
-		// GuaranteedUpdate, which already holds the write lock for this key, so
-		// GetContainerProfileMetadata (which takes a read lock) would self-deadlock.
-		// If the consolidated profile does not exist yet (or cannot be loaded),
-		// this is a create and there is nothing to guard.
-		if existingProfile, err := a.ContainerProfileStorage.GetContainerProfileMetadataNoLock(ctx, key); err == nil {
-			if existingProfile.Annotations[helpers.StatusMetadataKey] == helpers.Completed &&
-				profile.Annotations[helpers.StatusMetadataKey] == helpers.Learning {
-				if profile.Annotations == nil {
-					profile.Annotations = make(map[string]string)
-				}
-				profile.Annotations[helpers.StatusMetadataKey] = helpers.Completed
-			}
-		} else if !storage.IsNotFound(err) {
-			// A genuine read error (not "does not exist yet") means we could
-			// not verify whether the consolidated profile is already Completed.
-			// Leave the incoming status untouched, but leave a diagnostic trail
-			// so a Completed->Learning regression that slips through here is not
-			// silent.
-			logger.L().Debug("ContainerProfileProcessor.PreSave - failed to check consolidated completed status", loggerhelpers.Error(err), loggerhelpers.String("key", key))
-		}
 	}
 
 	// size is the sum of all fields in all containers
@@ -750,8 +696,7 @@ func (a *ContainerProfileProcessor) consolidateContinuousTimeSeries(
 }
 
 // updateProfileStatus updates the profile status based on time series state.
-//
-// Returns true if further processing should be skipped (e.g., profile is fully completed).
+// A profile never stops learning: a container's final chunk only closes its series.
 func (a *ContainerProfileProcessor) updateProfileStatus(ctx context.Context, key, seriesID string,
 	profile *softwarecomposition.ContainerProfile, newTimeSeries []softwarecomposition.TimeSeriesContainers, expired bool) ([]softwarecomposition.TimeSeriesContainers, bool, error) {
 
@@ -771,29 +716,10 @@ func (a *ContainerProfileProcessor) updateProfileStatus(ctx context.Context, key
 		return newTimeSeries, false, nil
 	}
 
+	profile.SetLearningStatus(newTimeSeries[0])
 	switch newTimeSeries[0].Status {
-	case helpers.Completed:
-		// Safeguard: if already fully completed, keep it that way
-		if profile.SetCompletedStatus(newTimeSeries[0]) {
-			logger.L().Debug("ContainerProfileProcessor.updateProfileStatus - profile is completed/full, skipping further processing",
-				loggerhelpers.String("key", key), loggerhelpers.String("seriesID", seriesID))
-
-			// Remove all time series data
-			if err := a.ContainerProfileStorage.DeleteTimeSeriesContainerEntries(ctx, key); err != nil {
-				return newTimeSeries, false, fmt.Errorf("failed to delete time series data: %w", err)
-			}
-			return newTimeSeries[:0], true, nil
-		}
-		// Clear this time series as it is finished
+	case helpers.Completed, helpers.Failed:
 		newTimeSeries = newTimeSeries[:0]
-
-	case helpers.Failed:
-		profile.SetFailedStatus(newTimeSeries[0])
-		// Clear this time series as it is finished
-		newTimeSeries = newTimeSeries[:0]
-
-	default:
-		profile.SetLearningStatus(newTimeSeries[0]) // series is complete but not finished
 	}
 
 	return newTimeSeries, false, nil
