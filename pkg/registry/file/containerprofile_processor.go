@@ -54,10 +54,14 @@ type ContainerProfileProcessor struct {
 	// production wiring may swap to a provider that reads the cluster-scoped
 	// CollapseConfiguration "default" CR.
 	CollapseSettings dynamicpathdetector.CollapseSettingsProvider
+	// CollapseSettingsFor selects the settings by the profile labels (kubescape.io/sbom-type); nil means CollapseSettings for every profile.
+	CollapseSettingsFor func(labels map[string]string) dynamicpathdetector.CollapseSettings
 	// Workers bounds how many keys ConsolidateTimeSeries processes concurrently,
 	// each on its own pool connection. Kept a fraction of the pool size so the
 	// background consolidation never starves REST traffic of connections.
 	Workers int
+	// MaxChunksPerMerge bounds how many time-series chunks one consolidation of a key merges per tick; the rest wait for the next tick. 0 means no bound.
+	MaxChunksPerMerge int
 	// consolidateKey is the per-key consolidation entrypoint dispatched by
 	// ConsolidateTimeSeries. nil means use consolidateKeyTimeSeries; tests
 	// override it to count invocations or inject per-key failures.
@@ -79,6 +83,7 @@ func NewContainerProfileProcessor(cfg config.Config, cleanupHandler *ResourcesCl
 		MaxContainerProfileSize: cfg.MaxContainerProfileSize,
 		CollapseSettings:        dynamicpathdetector.DefaultCollapseSettings,
 		Workers:                 max(1, DefaultPoolSize/4),
+		MaxChunksPerMerge:       DefaultMaxChunksPerMerge,
 	}
 }
 
@@ -255,11 +260,7 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 	} else {
 		logger.L().Debug("ContainerProfileProcessor.PreSave - failed to get sbom name", loggerhelpers.Error(err), loggerhelpers.String("imageTag", profile.Spec.ImageTag), loggerhelpers.String("imageID", profile.Spec.ImageID))
 	}
-	settings := dynamicpathdetector.DefaultCollapseSettings()
-	if a.CollapseSettings != nil {
-		settings = a.CollapseSettings()
-	}
-	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet, settings)
+	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet, a.collapseSettingsFor(profile.Labels))
 	size += containerProfileSpecSize(profile.Spec)
 
 	if size > a.MaxContainerProfileSize {
@@ -606,6 +607,9 @@ func (a *ContainerProfileProcessor) updateProfile(ctx context.Context, timeSerie
 
 	// Process each time series
 	for seriesID := range timeSeries {
+		if rows := timeSeries[seriesID]; a.MaxChunksPerMerge > 0 && len(rows) > a.MaxChunksPerMerge {
+			timeSeries[seriesID] = rows[:a.MaxChunksPerMerge]
+		}
 		processResult, err := a.processTimeSeries(ctx, timeSeries, seriesID, key, &profile, &creationTimestamp, expired)
 		if err != nil {
 			return nil, err
@@ -709,6 +713,7 @@ func (a *ContainerProfileProcessor) mergeTimeSeriesData(ctx context.Context,
 		}
 
 		hasNewData = true
+		tsProfile.Spec = DeflateContainerProfileSpec(tsProfile.Spec, nil, a.collapseSettingsFor(profile.Labels))
 		mergeContainerProfileTS(profile, &tsProfile)
 		timeSeriesContainers[k].HasData = false
 		processed = append(processed, tsKey)
@@ -1077,4 +1082,16 @@ func newerTimeline(existing, incoming string) string {
 
 func containerProfileSpecSize(spec softwarecomposition.ContainerProfileSpec) int {
 	return len(spec.Execs) + len(spec.Opens) + len(spec.Syscalls) + len(spec.Capabilities) + len(spec.Endpoints) + len(spec.IdentifiedCallStacks) + len(spec.Ingress) + len(spec.Egress)
+}
+
+const DefaultMaxChunksPerMerge = 64
+
+func (a *ContainerProfileProcessor) collapseSettingsFor(labels map[string]string) dynamicpathdetector.CollapseSettings {
+	if a.CollapseSettingsFor != nil {
+		return a.CollapseSettingsFor(labels)
+	}
+	if a.CollapseSettings != nil {
+		return a.CollapseSettings()
+	}
+	return dynamicpathdetector.DefaultCollapseSettings()
 }
