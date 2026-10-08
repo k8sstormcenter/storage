@@ -217,6 +217,15 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 	// size is the sum of all fields in all containers
 	var size int
 
+	if profile.Annotations[helpers.ManagedByMetadataKey] == helpers.ManagedByUserValue {
+		size = containerProfileSpecSize(profile.Spec)
+		if size > a.MaxContainerProfileSize {
+			profile.Annotations[helpers.StatusMetadataKey] = helpers.TooLarge
+		}
+		profile.Annotations[helpers.ResourceSizeMetadataKey] = strconv.Itoa(size)
+		return nil
+	}
+
 	var sbomSet mapset.Set[string]
 	// get files from corresponding sbom
 	sbomName, err := names.ImageInfoToSlug(profile.Spec.ImageTag, profile.Spec.ImageID)
@@ -251,14 +260,7 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 		settings = a.CollapseSettings()
 	}
 	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet, settings)
-	size += len(profile.Spec.Execs)
-	size += len(profile.Spec.Opens)
-	size += len(profile.Spec.Syscalls)
-	size += len(profile.Spec.Capabilities)
-	size += len(profile.Spec.Endpoints)
-	size += len(profile.Spec.IdentifiedCallStacks)
-	size += len(profile.Spec.Ingress)
-	size += len(profile.Spec.Egress)
+	size += containerProfileSpecSize(profile.Spec)
 
 	if size > a.MaxContainerProfileSize {
 		// set annotation but don't return an error as we want to save the profile anyway
@@ -1071,4 +1073,8 @@ func newerTimeline(existing, incoming string) string {
 		return incoming
 	}
 	return existing
+}
+
+func containerProfileSpecSize(spec softwarecomposition.ContainerProfileSpec) int {
+	return len(spec.Execs) + len(spec.Opens) + len(spec.Syscalls) + len(spec.Capabilities) + len(spec.Endpoints) + len(spec.IdentifiedCallStacks) + len(spec.Ingress) + len(spec.Egress)
 }
