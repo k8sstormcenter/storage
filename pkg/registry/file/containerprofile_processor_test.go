@@ -523,16 +523,19 @@ func TestUpdateProfileStatusExpired(t *testing.T) {
 
 	ts := []softwarecomposition.TimeSeriesContainers{
 		{
-			Status:   helpersv1.Learning,
-			TsSuffix: "123",
+			Status:     helpersv1.Learning,
+			Completion: helpersv1.Partial,
+			TsSuffix:   "123",
 		},
 	}
 
+	profile.Annotations[helpersv1.StatusMetadataKey] = helpersv1.Learning
+	profile.Annotations[helpersv1.CompletionMetadataKey] = helpersv1.Partial
 	res, skip, err := processor.updateProfileStatus(context.TODO(), "key", "seriesID", profile, ts, true)
 	assert.NoError(t, err)
 	assert.False(t, skip)
-	assert.Len(t, res, 0) // should be cleared
-	assert.Equal(t, helpersv1.Completed, profile.Annotations[helpersv1.StatusMetadataKey])
+	assert.Len(t, res, 0)
+	assert.Equal(t, helpersv1.Learning, profile.Annotations[helpersv1.StatusMetadataKey])
 	assert.Equal(t, helpersv1.Partial, profile.Annotations[helpersv1.CompletionMetadataKey])
 }
 
@@ -548,7 +551,7 @@ func (m *mockContainerProfileStorage) DeleteTimeSeriesContainerEntries(ctx conte
 	return nil
 }
 
-func TestUpdateProfileStatusExpiredFull(t *testing.T) {
+func TestUpdateProfileStatusExpiredCompletedChunkDoesNotFinalize(t *testing.T) {
 	mockStorage := &mockContainerProfileStorage{}
 	processor := ContainerProfileProcessor{
 		ContainerProfileStorage: mockStorage,
@@ -570,24 +573,17 @@ func TestUpdateProfileStatusExpiredFull(t *testing.T) {
 		},
 	}
 
+	profile.Annotations[helpersv1.StatusMetadataKey] = helpersv1.Learning
 	res, skip, err := processor.updateProfileStatus(context.TODO(), "test-key", "seriesID", profile, ts, true)
 	assert.NoError(t, err)
-	assert.True(t, skip)
-	assert.Len(t, res, 0) // should be cleared
-	assert.True(t, mockStorage.deleteCalled)
-	assert.Equal(t, "test-key", mockStorage.deleteKey)
-	assert.Equal(t, helpersv1.Completed, profile.Annotations[helpersv1.StatusMetadataKey])
-	assert.Equal(t, helpersv1.Full, profile.Annotations[helpersv1.CompletionMetadataKey])
+	assert.False(t, skip)
+	assert.Len(t, res, 0)
+	assert.False(t, mockStorage.deleteCalled)
+	assert.Equal(t, helpersv1.Learning, profile.Annotations[helpersv1.StatusMetadataKey])
 }
 
-// TestConsolidate_StatusTransitionPersistsWithoutNewData pins the
-// persist-on-transition contract: a maintenance pass that changes the
-// profile's lifecycle status while merging NO new part data (the expired /
-// late-finalization passes) must still save the consolidated profile.
-// Gating the save on new data alone dropped the in-memory transition after
-// the time-series rows were already cleared — the served profile then stayed
-// 'ready' forever with nothing left to consolidate.
-func TestConsolidate_StatusTransitionPersistsWithoutNewData(t *testing.T) {
+// TestConsolidate_ExpiredSeriesKeepsLearning: expiry clears stale series rows and nothing else; a later chunk still merges.
+func TestConsolidate_ExpiredSeriesKeepsLearning(t *testing.T) {
 	pool := NewTestPool(t.TempDir())
 	require.NotNil(t, pool)
 	defer func() { _ = pool.Close() }()
@@ -621,15 +617,25 @@ func TestConsolidate_StatusTransitionPersistsWithoutNewData(t *testing.T) {
 	// Pass 1: merges the part (new data), profile saved in learning state.
 	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
 
-	// Let the series expire, then run a pass with NO new part data: the
-	// expired finalization transitions the status to Completed/Partial.
 	time.Sleep(80 * time.Millisecond)
 	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
 
 	got := softwarecomposition.ContainerProfile{}
 	key := "/spdx.softwarecomposition.kubescape.io/containerprofile/kube-system/replicaset-coredns-5d78c9869d-coredns-185f-129c"
 	require.NoError(t, s.Get(ctx, key, storage.GetOptions{}, &got))
-	assert.Equal(t, "completed", got.Annotations["kubescape.io/status"],
-		"a no-new-data finalization pass must persist the status transition")
+	assert.Equal(t, "ready", got.Annotations["kubescape.io/status"])
 	assert.Equal(t, "partial", got.Annotations["kubescape.io/completion"])
+	rvAfterExpiry := got.ResourceVersion
+
+	content, err = os.ReadFile("testdata/p2.json")
+	require.NoError(t, err)
+	var part2 softwarecomposition.ContainerProfile
+	require.NoError(t, json.Unmarshal(content, &part2))
+	require.NoError(t, s.Create(ctx, "/spdx.softwarecomposition.kubescape.io/containerprofile/"+part2.Namespace+"/"+part2.Name, &part2, nil, 0))
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+
+	got = softwarecomposition.ContainerProfile{}
+	require.NoError(t, s.Get(ctx, key, storage.GetOptions{}, &got))
+	assert.Equal(t, "ready", got.Annotations["kubescape.io/status"])
+	assert.NotEqual(t, rvAfterExpiry, got.ResourceVersion)
 }

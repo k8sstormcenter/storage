@@ -325,14 +325,7 @@ func (a *ContainerProfileProcessor) cleanup() error {
 	return a.CleanupHandler.CleanupTask(context.TODO(), resourceToKindHandler)
 }
 
-// ConsolidateTimeSeries processes all time series data, handling expired and active series separately.
-//
-// The function runs in two phases:
-// 1. Process expired time series (past deleteThreshold) - marked as Completed/Partial
-// 2. Process active time series with data - follow normal completion flow
-//
-// Expired time series are always marked as Completed/Partial unless they were already Completed/Full,
-// ensuring incomplete profiles don't remain in a Learning state indefinitely.
+// ConsolidateTimeSeries processes all time series data; expired series only have their stale rows dropped.
 func (a *ContainerProfileProcessor) ConsolidateTimeSeries(ctx context.Context) error {
 	// Phase 0: list keys under a short-lived connection, then release it so the
 	// per-key workers below each acquire their own connection from the pool.
@@ -340,7 +333,7 @@ func (a *ContainerProfileProcessor) ConsolidateTimeSeries(ctx context.Context) e
 	if err != nil {
 		return fmt.Errorf("failed to take connection for listing: %w", err)
 	}
-	// Phase 1: expired time series (past deleteThreshold), marked Completed/Partial.
+	// Phase 1: expired time series (past deleteThreshold): stale rows dropped.
 	expired, err := a.ContainerProfileStorage.ListTimeSeriesExpired(listCtx, a.DeleteThreshold)
 	if err != nil {
 		cleanup()
@@ -410,8 +403,7 @@ func (a *ContainerProfileProcessor) ConsolidateTimeSeries(ctx context.Context) e
 
 // consolidateKeyTimeSeries consolidates time series data for a single key.
 //
-// The expired parameter indicates whether this time series has exceeded the deleteThreshold.
-// When expired=true, the resulting profile will be marked as Completed/Partial (unless already Completed/Full).
+// The expired parameter indicates whether this time series has exceeded the deleteThreshold; its rows are dropped, the status is never changed.
 func (a *ContainerProfileProcessor) consolidateKeyTimeSeries(ctx context.Context, key string, expired bool) error {
 	logger.L().Debug("ContainerProfileProcessor.consolidateKeyTimeSeries - consolidating data for key", loggerhelpers.String("key", key), loggerhelpers.Interface("expired", expired))
 
@@ -759,39 +751,16 @@ func (a *ContainerProfileProcessor) consolidateContinuousTimeSeries(
 
 // updateProfileStatus updates the profile status based on time series state.
 //
-// When expired=true, the profile is marked as Completed/Partial instead of Learning,
-// unless it's already Completed/Full (safeguard). This ensures expired time series
-// don't remain in Learning state indefinitely.
-//
 // Returns true if further processing should be skipped (e.g., profile is fully completed).
 func (a *ContainerProfileProcessor) updateProfileStatus(ctx context.Context, key, seriesID string,
 	profile *softwarecomposition.ContainerProfile, newTimeSeries []softwarecomposition.TimeSeriesContainers, expired bool) ([]softwarecomposition.TimeSeriesContainers, bool, error) {
 
-	// If the time series is expired, we finalize it as Completed/Partial (unless it is already Completed/Full)
-	// and clear the time series data so we don't leak zombie records.
 	if expired {
-		// Try to mark it as Completed/Full if we actually have a Completed status and the series is continuous
-		var isFull bool
-		if len(newTimeSeries) == 1 && isZeroTime(newTimeSeries[0].PreviousReportTimestamp) && newTimeSeries[0].Status == helpers.Completed {
-			isFull = profile.SetCompletedStatus(newTimeSeries[0])
+		if len(newTimeSeries) > 0 {
+			profile.SetLearningStatus(newTimeSeries[0])
 		}
-
-		if isFull {
-			logger.L().Debug("ContainerProfileProcessor.updateProfileStatus - expired profile is completed/full, skipping further processing",
-				loggerhelpers.String("key", key), loggerhelpers.String("seriesID", seriesID))
-
-			// Remove all time series data
-			if err := a.ContainerProfileStorage.DeleteTimeSeriesContainerEntries(ctx, key); err != nil {
-				return newTimeSeries, false, fmt.Errorf("failed to delete time series data: %w", err)
-			}
-			return newTimeSeries[:0], true, nil
-		}
-
-		// Otherwise, mark it as Completed/Partial (unless already Completed/Full)
-		if profile.Annotations[helpers.StatusMetadataKey] != helpers.Completed || profile.Annotations[helpers.CompletionMetadataKey] != helpers.Full {
-			profile.Annotations[helpers.StatusMetadataKey] = helpers.Completed
-			profile.Annotations[helpers.CompletionMetadataKey] = helpers.Partial
-		}
+		logger.L().Debug("ContainerProfileProcessor.updateProfileStatus - expired series rows dropped, learning continues",
+			loggerhelpers.String("key", key), loggerhelpers.String("seriesID", seriesID))
 		return newTimeSeries[:0], false, nil
 	}
 
