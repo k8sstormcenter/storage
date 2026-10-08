@@ -54,6 +54,8 @@ type ContainerProfileProcessor struct {
 	// production wiring may swap to a provider that reads the cluster-scoped
 	// CollapseConfiguration "default" CR.
 	CollapseSettings dynamicpathdetector.CollapseSettingsProvider
+	// CollapseSettingsFor selects the settings by the profile labels (kubescape.io/sbom-type); nil means CollapseSettings for every profile.
+	CollapseSettingsFor func(labels map[string]string) dynamicpathdetector.CollapseSettings
 	// Workers bounds how many keys ConsolidateTimeSeries processes concurrently,
 	// each on its own pool connection. Kept a fraction of the pool size so the
 	// background consolidation never starves REST traffic of connections.
@@ -256,7 +258,9 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 		logger.L().Debug("ContainerProfileProcessor.PreSave - failed to get sbom name", loggerhelpers.Error(err), loggerhelpers.String("imageTag", profile.Spec.ImageTag), loggerhelpers.String("imageID", profile.Spec.ImageID))
 	}
 	settings := dynamicpathdetector.DefaultCollapseSettings()
-	if a.CollapseSettings != nil {
+	if a.CollapseSettingsFor != nil {
+		settings = a.CollapseSettingsFor(profile.Labels)
+	} else if a.CollapseSettings != nil {
 		settings = a.CollapseSettings()
 	}
 	profile.Spec = DeflateContainerProfileSpec(profile.Spec, sbomSet, settings)

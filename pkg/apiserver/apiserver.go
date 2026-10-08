@@ -175,6 +175,7 @@ func (c completedConfig) New() (*WardleServer, error) {
 	// CR update affects both compaction paths consistently.
 	collapseSettingsFromCRD := file.NewCRDCollapseSettingsProvider(storageImpl)
 	containerProfileProcessor.CollapseSettings = collapseSettingsFromCRD
+	containerProfileProcessor.CollapseSettingsFor = file.NewCRDCollapseSettingsForProvider(storageImpl)
 	apiGroupInfo.VersionedResourcesStorageMap["v1beta1"] = map[string]rest.Storage{
 		"collapseconfigurations":              ep(collapseconfiguration.NewREST),
 		"configurationscansummaries":          ep(configurationscansummary.NewREST, configScanStorageImpl),

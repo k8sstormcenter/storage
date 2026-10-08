@@ -12,6 +12,7 @@ package file
 
 import (
 	"context"
+	helpersv1 "github.com/kubescape/k8s-interface/instanceidhandler/v1/helpers"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,7 @@ var collapseSettingsTTL = 2 * time.Minute
 // cachedCollapseSettings is the value stored behind the provider's
 // atomic.Pointer: the settings snapshot plus when it goes stale.
 type cachedCollapseSettings struct {
+	found     bool
 	settings  dynamicpathdetector.CollapseSettings
 	expiresAt time.Time
 }
@@ -111,5 +113,51 @@ func NewCRDCollapseSettingsProvider(s storage.Interface) dynamicpathdetector.Col
 		settings := load()
 		cache.Store(&cachedCollapseSettings{settings: settings, expiresAt: time.Now().Add(collapseSettingsTTL)})
 		return settings
+	}
+}
+
+// NewCRDCollapseSettingsForProvider selects collapse settings per profile
+// kind: a profile labelled kubescape.io/sbom-type=<kind> uses the
+// cluster-scoped CollapseConfiguration named <kind> when it exists, and
+// falls back to CollapseConfiguration/default, then to the compiled-in
+// defaults. Each name is cached independently for collapseSettingsTTL.
+func NewCRDCollapseSettingsForProvider(s storage.Interface) func(labels map[string]string) dynamicpathdetector.CollapseSettings {
+	if s == nil {
+		return func(map[string]string) dynamicpathdetector.CollapseSettings {
+			return dynamicpathdetector.DefaultCollapseSettings()
+		}
+	}
+	byDefault := NewCRDCollapseSettingsProvider(s)
+	var mu sync.Mutex
+	cache := map[string]*cachedCollapseSettings{}
+	load := func(name string) (dynamicpathdetector.CollapseSettings, bool) {
+		crd := &softwarecomposition.CollapseConfiguration{}
+		err := s.Get(context.Background(), collapseConfigurationKey(name), storage.GetOptions{IgnoreNotFound: true}, crd)
+		if err != nil || crd.Name == "" {
+			return dynamicpathdetector.CollapseSettings{}, false
+		}
+		return dynamicpathdetector.CollapseSettingsFromCRD(crd), true
+	}
+	return func(labels map[string]string) dynamicpathdetector.CollapseSettings {
+		kind := labels[helpersv1.ArtifactTypeMetadataKey]
+		if kind == "" || kind == DefaultCollapseConfigurationName {
+			return byDefault()
+		}
+		mu.Lock()
+		c, ok := cache[kind]
+		if ok && time.Now().Before(c.expiresAt) {
+			mu.Unlock()
+			if c.found {
+				return c.settings
+			}
+			return byDefault()
+		}
+		settings, found := load(kind)
+		cache[kind] = &cachedCollapseSettings{settings: settings, found: found, expiresAt: time.Now().Add(collapseSettingsTTL)}
+		mu.Unlock()
+		if found {
+			return settings
+		}
+		return byDefault()
 	}
 }
