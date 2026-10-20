@@ -143,6 +143,10 @@ func (c *ContainerProfileStorageImpl) GetTsContainerProfile(ctx context.Context,
 	return tsProfile, err
 }
 
+// consolidatedSaveTimeout bounds one consolidated-profile save. It is a package
+// variable so tests can shorten it.
+var consolidatedSaveTimeout = 2 * time.Minute
+
 func (c *ContainerProfileStorageImpl) SaveContainerProfile(ctx context.Context, key string, profile *softwarecomposition.ContainerProfile) error {
 	// input is the persisted object, read under Lock(key) at write time. Every
 	// writer of a base key holds Lock(key) across both the payload rename and
@@ -159,7 +163,14 @@ func (c *ContainerProfileStorageImpl) SaveContainerProfile(ctx context.Context, 
 		return profile, nil, nil
 	}
 
-	cpCtx, cpCancel := context.WithTimeout(ctx, 5*time.Second)
+	// The consolidated save decodes the current object and encodes the merged
+	// one before it takes the gate; for a large host profile that is far more
+	// than the 5 s an API request is bounded to, and a save that times out
+	// rolls the pass back, keeps every part, and fails again next pass: the
+	// profile never consolidates and its parts grow without bound (observed
+	// live on one node profile: 7 of 7 passes failed, 705 parts on another
+	// cluster). The bound here only has to stop a wedged save, not a slow one.
+	cpCtx, cpCancel := context.WithTimeout(ctx, consolidatedSaveTimeout)
 	defer cpCancel()
 
 	// cachedExistingObject is deliberately nil. Passing a non-nil value (even an
