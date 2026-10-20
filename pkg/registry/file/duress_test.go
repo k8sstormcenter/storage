@@ -65,7 +65,7 @@ func newDuressEnv(t *testing.T) *duressEnv {
 }
 
 func cpKey(ns, name string) string {
-	return "/spdx.softwarecomposition.kubescape.io/containerprofiles/" + ns + "/" + name
+	return "/spdx.softwarecomposition.kubescape.io/containerprofile/" + ns + "/" + name
 }
 
 func mkCP(ns, name string, gen int) *softwarecomposition.ContainerProfile {
@@ -88,6 +88,9 @@ func contractedErr(err error) bool {
 		return true
 	}
 	if storage.IsExist(err) || storage.IsNotFound(err) {
+		return true
+	}
+	if errors.Is(err, ObjectCompletedError) || errors.Is(err, ObjectTooLargeError) {
 		return true
 	}
 	if apierrors.IsAlreadyExists(err) || apierrors.IsNotFound(err) || apierrors.IsServerTimeout(err) || apierrors.IsConflict(err) {
@@ -460,7 +463,7 @@ func duressParts(ns string, seriesID string, n int) ([]*softwarecomposition.Cont
 	if err != nil {
 		return nil, err
 	}
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	base := time.Now().Add(-10 * time.Minute).UTC()
 	parts := make([]*softwarecomposition.ContainerProfile, 0, n)
 	for i := 0; i < n; i++ {
 		var p softwarecomposition.ContainerProfile

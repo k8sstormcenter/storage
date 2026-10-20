@@ -379,7 +379,11 @@ func ListTimeSeriesExpired(conn *sqlite.Conn, d time.Duration) ([]string, error)
 	if d <= 0 {
 		return keys, nil
 	}
-	threshold := time.Now().Add(-d).String()
+	// reportTimestamp rows are the agent's time.Time.String() in UTC; the
+	// column is compared as text, so the threshold must be formatted in UTC
+	// too, whatever the process's local zone is. A local zone ahead of UTC
+	// made every row look older than the threshold and every series expired.
+	threshold := time.Now().UTC().Add(-d).String()
 	err := sqlitex.Execute(conn,
 		`SELECT kind, namespace, name
 				FROM time_series
