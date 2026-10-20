@@ -572,10 +572,9 @@ func TestUpdateProfileStatusExpiredFull(t *testing.T) {
 
 	res, skip, err := processor.updateProfileStatus(context.TODO(), "test-key", "seriesID", profile, ts, true)
 	assert.NoError(t, err)
-	assert.True(t, skip)
+	assert.True(t, skip, "a finished series is cleared by the commit phase")
 	assert.Len(t, res, 0) // should be cleared
-	assert.True(t, mockStorage.deleteCalled)
-	assert.Equal(t, "test-key", mockStorage.deleteKey)
+	assert.False(t, mockStorage.deleteCalled, "the row clear is deferred to the gated commit")
 	assert.Equal(t, helpersv1.Completed, profile.Annotations[helpersv1.StatusMetadataKey])
 	assert.Equal(t, helpersv1.Full, profile.Annotations[helpersv1.CompletionMetadataKey])
 }
