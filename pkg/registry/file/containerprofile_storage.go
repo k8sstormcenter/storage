@@ -93,6 +93,17 @@ func (c *ContainerProfileStorageImpl) GetContainerProfileMetadataNoLock(ctx cont
 	return profile, err
 }
 
+// GetContainerProfileNoLock reads the full consolidated profile without
+// acquiring the per-key lock. Consolidation planning runs under the key's
+// write lock, so the locking read would self-deadlock; the caller's lock
+// already excludes API writers of the same key.
+func (c *ContainerProfileStorageImpl) GetContainerProfileNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
+	conn := ctx.Value(connKey).(*sqlite.Conn)
+	profile := softwarecomposition.ContainerProfile{}
+	err := c.storageImpl.get(ctx, conn, key, storage.GetOptions{}, &profile, hasWriteLock)
+	return profile, err
+}
+
 func (c *ContainerProfileStorageImpl) GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error) {
 	conn := ctx.Value(connKey).(*sqlite.Conn)
 	sbom := softwarecomposition.SBOMSyft{}

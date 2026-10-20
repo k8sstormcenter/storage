@@ -132,6 +132,9 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 		// do not return an error as we might call this on AP and NN as part of the updateProfile() flow below
 		return nil
 	}
+	if ctx.Value(presaveDoneCtxKey) != nil {
+		return nil
+	}
 
 	// detect TS profiles
 	if profile.Annotations[helpers.ReportSeriesIdMetadataKey] != "" {
@@ -413,6 +416,14 @@ func (a *ContainerProfileProcessor) ConsolidateTimeSeries(ctx context.Context) e
 //
 // The expired parameter indicates whether this time series has exceeded the deleteThreshold.
 // When expired=true, the resulting profile will be marked as Completed/Partial (unless already Completed/Full).
+//
+// Phases: the per-key lock is held for planning and commit; the process-wide
+// write gate only for the commit. Planning reads the parts, merges them and
+// deflates the result without the gate, so API writers of other keys are not
+// blocked for the duration of a merge. The commit is one gate hold around one
+// savepoint: the time-series rows and the consolidated profile land together
+// or not at all. Part reads are safe without the gate because part keys are
+// create-once and the consolidated key is covered by the per-key lock.
 func (a *ContainerProfileProcessor) consolidateKeyTimeSeries(ctx context.Context, key string, expired bool) error {
 	logger.L().Debug("ContainerProfileProcessor.consolidateKeyTimeSeries - consolidating data for key", loggerhelpers.String("key", key), loggerhelpers.Interface("expired", expired))
 
@@ -424,17 +435,17 @@ func (a *ContainerProfileProcessor) consolidateKeyTimeSeries(ctx context.Context
 	}
 	defer cleanup()
 
-	timeSeries, err := a.ContainerProfileStorage.ListTimeSeriesContainers(ctx, key)
-	if err != nil {
-		return fmt.Errorf("failed to list time series containers: %w", err)
-	}
-
-	profile, id, prefix, root, err := a.loadOrInitializeProfile(ctx, key)
+	ctx, unlock, err := a.lockConsolidatedKey(ctx, key)
 	if err != nil {
 		return err
 	}
-
-	processed, err := a.processTimeSeriesInTransaction(ctx, timeSeries, key, profile, prefix, root, id, expired)
+	plan, id, err := a.planConsolidation(ctx, key, expired)
+	if err != nil {
+		unlock()
+		return err
+	}
+	err = a.commitConsolidation(ctx, key, plan)
+	unlock()
 	if err != nil {
 		return err
 	}
@@ -443,17 +454,35 @@ func (a *ContainerProfileProcessor) consolidateKeyTimeSeries(ctx context.Context
 	// This allows downstream processing even if the ingester dies after consolidation
 	// Only send for k8s host type
 	if a.HostType == armotypes.HostTypeKubernetes {
-		if err := a.sendConsolidatedSlugToChannel(ctx, profile, id); err != nil {
+		if err := a.sendConsolidatedSlugToChannel(ctx, *plan.profile, id); err != nil {
 			return err
 		}
 	}
 
-	if err := a.deleteProcessedTimeSeries(ctx, processed); err != nil {
+	if err := a.deleteProcessedTimeSeries(ctx, plan.processed); err != nil {
 		return err
 	}
 
 	logger.L().Debug("ContainerProfileProcessor.consolidateKeyTimeSeries - finished consolidating data for key", loggerhelpers.String("key", key))
 	return nil
+}
+
+// lockConsolidatedKey takes the per-key write lock for the consolidated key
+// (lock ordering: per-key lock before the write gate, DURESS.md rows 4/11/14)
+// and marks the context so the inner consolidated-profile save does not
+// re-acquire it. Storage backends without the real lock table run unlocked.
+func (a *ContainerProfileProcessor) lockConsolidatedKey(ctx context.Context, key string) (context.Context, func(), error) {
+	impl, ok := a.ContainerProfileStorage.(*ContainerProfileStorageImpl)
+	if !ok {
+		return ctx, func() {}, nil
+	}
+	si := impl.GetStorageImpl()
+	lockCtx, lockCancel := context.WithTimeout(ctx, lockTimeout)
+	defer lockCancel()
+	if err := si.locks.Lock(lockCtx, key); err != nil {
+		return ctx, nil, fmt.Errorf("lock key for consolidation: %w", err)
+	}
+	return context.WithValue(ctx, lockHeldCtxKey, key), func() { si.locks.Unlock(key) }, nil
 }
 
 // sendConsolidatedSlugToChannel calculates the slug from the profile and sends it to the channel
@@ -501,7 +530,7 @@ func (a *ContainerProfileProcessor) loadOrInitializeProfile(ctx context.Context,
 	cpCtx, cpCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cpCancel()
 
-	profile, err = a.ContainerProfileStorage.GetContainerProfile(cpCtx, key)
+	profile, err = a.ContainerProfileStorage.GetContainerProfileNoLock(cpCtx, key)
 
 	id, prefix, root, kind, parseErr := ParseContainerProfileKey(key, a.HostType)
 	if parseErr != nil {
@@ -530,47 +559,167 @@ func (a *ContainerProfileProcessor) loadOrInitializeProfile(ctx context.Context,
 	return profile, id, prefix, root, err
 }
 
-// processTimeSeriesInTransaction processes time series data within a database transaction
-func (a *ContainerProfileProcessor) processTimeSeriesInTransaction(ctx context.Context,
-	timeSeries map[string][]softwarecomposition.TimeSeriesContainers, key string,
-	profile softwarecomposition.ContainerProfile, prefix, root string, id armotypes.ProfileIdentifier, expired bool) ([]string, error) {
+// presaveDoneCtxKey marks a context whose consolidated profile has already
+// been through PreSave during planning. The save inside the gated commit then
+// skips PreSave: the deflate must not run a second time (it is not idempotent)
+// and the sbom lookup must not run under the gate.
+type presaveDoneCtxKeyType struct{}
 
-	// Lock ordering for the consolidation transaction (DURESS.md rows 4/11/14):
-	// per-key write lock first — serializing with API writers on the SAME
-	// consolidated key — then the process-wide write gate for the duration of
-	// the SQL transaction. The lock-held marker lets the inner consolidated-
-	// profile save skip re-acquiring the key lock; part reads inside the
-	// transaction run lock-free (no rename can land while the gate is held).
+var presaveDoneCtxKey = presaveDoneCtxKeyType{}
+
+// seriesCommit is the row-level outcome of planning one time series: the
+// suffixes to drop, the consolidated rows to write back, and whether the
+// series finished (every row for the key is cleared before the write-back).
+type seriesCommit struct {
+	seriesID         string
+	deleteTimeSeries []string
+	newTimeSeries    []softwarecomposition.TimeSeriesContainers
+	clearAll         bool
+}
+
+// consolidationPlan is everything the commit phase writes. profile already
+// carries the merged and deflated content when save is true. plannedRows
+// lists every time-series row the planning phase saw, per series: when the
+// profile finished (clearAll), exactly those rows are removed. A row written
+// by a part that landed between planning and commit is not in the plan and
+// survives for the next pass instead of being wiped unseen.
+type consolidationPlan struct {
+	profile     *softwarecomposition.ContainerProfile
+	processed   []string
+	commits     []seriesCommit
+	plannedRows map[string][]string
+	clearAll    bool
+	save        bool
+}
+
+// planConsolidation lists the key's time series, loads the consolidated
+// profile, merges every part with data into it and prepares it for saving.
+// Runs under the per-key lock only; nothing here touches the write gate.
+func (a *ContainerProfileProcessor) planConsolidation(ctx context.Context, key string, expired bool) (*consolidationPlan, armotypes.ProfileIdentifier, error) {
+	timeSeries, err := a.ContainerProfileStorage.ListTimeSeriesContainers(ctx, key)
+	if err != nil {
+		return nil, armotypes.ProfileIdentifier{}, fmt.Errorf("failed to list time series containers: %w", err)
+	}
+
+	profile, id, _, _, err := a.loadOrInitializeProfile(ctx, key)
+	if err != nil {
+		return nil, id, err
+	}
+
+	plan := &consolidationPlan{profile: &profile, plannedRows: make(map[string][]string, len(timeSeries))}
+	for seriesID, rows := range timeSeries {
+		suffixes := make([]string, 0, len(rows))
+		for _, row := range rows {
+			suffixes = append(suffixes, row.TsSuffix)
+		}
+		plan.plannedRows[seriesID] = suffixes
+	}
+	creationTimestamp := metav1.Now()
+	var newData bool
+
+	// Snapshot the lifecycle annotations: a status transition must persist even
+	// when this pass merged no new part data. The completed/full finalization
+	// can land one maintenance pass AFTER the final part was merged (slow-disk
+	// timing); that pass has hasNewData=false, and gating the save on new data
+	// alone dropped the in-memory Completed/Full status while the time-series
+	// rows were already deleted — leaving the served profile stuck in 'ready'
+	// forever with nothing left to consolidate.
+	prevStatus := profile.Annotations[helpers.StatusMetadataKey]
+	prevCompletion := profile.Annotations[helpers.CompletionMetadataKey]
+
+	for seriesID := range timeSeries {
+		processResult, err := a.processTimeSeries(ctx, timeSeries, seriesID, key, &profile, &creationTimestamp, expired)
+		if err != nil {
+			return nil, id, err
+		}
+		plan.processed = append(plan.processed, processResult.processed...)
+		plan.commits = append(plan.commits, processResult.commit)
+		if processResult.hasNewData {
+			newData = true
+		}
+		if processResult.skipFurtherProcessing {
+			plan.clearAll = true
+			break
+		}
+	}
+
+	if _, ok := profile.Annotations[helpers.InstanceIDMetadataKey]; !ok {
+		// Without an InstanceID annotation we cannot derive the workload slug,
+		// so the observed save has no target.
+		logger.L().Debug("ContainerProfileProcessor.planConsolidation - skip saving invalid profile", loggerhelpers.String("key", key), loggerhelpers.Interface("profile", profile))
+		return plan, id, nil
+	}
+
+	// Persist the canonical observed CP when time-series consolidation produced
+	// new data this tick OR when the lifecycle status transitioned (completion
+	// finalization arrives without new part data). The observed CP is the
+	// time-series-only view (kubescape/storage#315 review).
+	statusChanged := profile.Annotations[helpers.StatusMetadataKey] != prevStatus ||
+		profile.Annotations[helpers.CompletionMetadataKey] != prevCompletion
+	if !newData && !statusChanged {
+		logger.L().Debug("ContainerProfileProcessor.planConsolidation - no new data, observed CP unchanged", loggerhelpers.String("key", key))
+		return plan, id, nil
+	}
+	if profile.CreationTimestamp.IsZero() {
+		profile.CreationTimestamp = creationTimestamp
+	}
+	// Deflate and size the merged profile now, outside the gate. The commit's
+	// save skips PreSave (presaveDoneCtxKey).
+	if err := a.PreSave(ctx, &profile); err != nil {
+		return nil, id, fmt.Errorf("prepare consolidated profile for key %s: %w", key, err)
+	}
+	plan.save = true
+	return plan, id, nil
+}
+
+// commitConsolidation writes the plan: one write-gate hold around one
+// savepoint covering the time-series row updates and the consolidated
+// profile save. A failure rolls the savepoint back and leaves every part and
+// row in place for the next pass.
+func (a *ContainerProfileProcessor) commitConsolidation(ctx context.Context, key string, plan *consolidationPlan) error {
 	if impl, ok := a.ContainerProfileStorage.(*ContainerProfileStorageImpl); ok {
 		si := impl.GetStorageImpl()
 		conn := ctx.Value(connKey).(*sqlite.Conn)
-		lockCtx, lockCancel := context.WithTimeout(ctx, lockTimeout)
-		defer lockCancel()
-		if lerr := si.locks.Lock(lockCtx, key); lerr != nil {
-			return nil, fmt.Errorf("lock key for consolidation: %w", lerr)
-		}
-		defer si.locks.Unlock(key)
-		ctx = context.WithValue(ctx, lockHeldCtxKey, key)
 		gateCtx, gateCancel := context.WithTimeout(ctx, lockTimeout)
 		defer gateCancel()
 		releaseGate, gerr := gateForPool(si.pool).acquire(gateCtx, conn)
 		if gerr != nil {
-			return nil, fmt.Errorf("write gate for consolidation: %w", gerr)
+			return fmt.Errorf("write gate for consolidation: %w", gerr)
 		}
 		defer releaseGate()
 	}
 	endFn, err := a.ContainerProfileStorage.BeginTransaction(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin nested transaction: %w", err)
+		return fmt.Errorf("failed to begin nested transaction: %w", err)
 	}
-	processed, err := a.updateProfile(ctx, timeSeries, key, profile, prefix, root, id, expired)
+	err = a.applyConsolidation(ctx, key, plan)
 	endFn(&err)
-
 	if err != nil {
-		return nil, fmt.Errorf("failed to process time series data for key %s (transaction rolled back): %w", key, err)
+		return fmt.Errorf("failed to process time series data for key %s (transaction rolled back): %w", key, err)
 	}
+	return nil
+}
 
-	return processed, nil
+func (a *ContainerProfileProcessor) applyConsolidation(ctx context.Context, key string, plan *consolidationPlan) error {
+	if plan.clearAll {
+		// The profile finished: every row the plan saw goes, for every series
+		// of the key, as before. Rows that arrived after planning stay.
+		for seriesID, suffixes := range plan.plannedRows {
+			if err := a.ContainerProfileStorage.ReplaceTimeSeriesContainerEntries(ctx, key, seriesID, suffixes, nil); err != nil {
+				return fmt.Errorf("failed to clear finished time series data: %w", err)
+			}
+		}
+	} else {
+		for _, c := range plan.commits {
+			if err := a.ContainerProfileStorage.ReplaceTimeSeriesContainerEntries(ctx, key, c.seriesID, c.deleteTimeSeries, c.newTimeSeries); err != nil {
+				return fmt.Errorf("failed to replace consolidated time series data: %w", err)
+			}
+		}
+	}
+	if !plan.save {
+		return nil
+	}
+	return a.ContainerProfileStorage.SaveContainerProfile(context.WithValue(ctx, presaveDoneCtxKey, key), key, plan.profile)
 }
 
 // deleteProcessedTimeSeries removes processed time series profiles from storage.
@@ -591,71 +740,16 @@ func (a *ContainerProfileProcessor) deleteProcessedTimeSeries(ctx context.Contex
 	return nil
 }
 
-func (a *ContainerProfileProcessor) updateProfile(ctx context.Context, timeSeries map[string][]softwarecomposition.TimeSeriesContainers, key string, profile softwarecomposition.ContainerProfile, prefix, root string, id armotypes.ProfileIdentifier, expired bool) ([]string, error) {
-	var processed []string
-	creationTimestamp := metav1.Now()
-	var newData bool
-
-	// Snapshot the lifecycle annotations: a status transition must persist even
-	// when this pass merged no new part data. The completed/full finalization
-	// can land one maintenance pass AFTER the final part was merged (slow-disk
-	// timing); that pass has hasNewData=false, and gating the save on new data
-	// alone dropped the in-memory Completed/Full status while the time-series
-	// rows were already deleted — leaving the served profile stuck in 'ready'
-	// forever with nothing left to consolidate.
-	prevStatus := profile.Annotations[helpers.StatusMetadataKey]
-	prevCompletion := profile.Annotations[helpers.CompletionMetadataKey]
-
-	// Process each time series
-	for seriesID := range timeSeries {
-		processResult, err := a.processTimeSeries(ctx, timeSeries, seriesID, key, &profile, &creationTimestamp, expired)
-		if err != nil {
-			return nil, err
-		}
-		processed = append(processed, processResult.processed...)
-		if processResult.hasNewData {
-			newData = true
-		}
-		if processResult.skipFurtherProcessing {
-			break
-		}
-	}
-
-	if _, ok := profile.Annotations[helpers.InstanceIDMetadataKey]; !ok {
-		// Without an InstanceID annotation we cannot derive the workload slug,
-		// so the observed save has no target.
-		logger.L().Debug("ContainerProfileProcessor.updateProfile - skip saving invalid profile", loggerhelpers.String("key", key), loggerhelpers.Interface("profile", profile))
-		return processed, nil
-	}
-
-	// Persist the canonical observed CP when time-series consolidation produced
-	// new data this tick OR when the lifecycle status transitioned (completion
-	// finalization arrives without new part data). The observed CP is the
-	// time-series-only view (kubescape/storage#315 review).
-	statusChanged := profile.Annotations[helpers.StatusMetadataKey] != prevStatus ||
-		profile.Annotations[helpers.CompletionMetadataKey] != prevCompletion
-	if newData || statusChanged {
-		if profile.CreationTimestamp.IsZero() {
-			profile.CreationTimestamp = creationTimestamp
-		}
-		if err := a.ContainerProfileStorage.SaveContainerProfile(ctx, key, &profile); err != nil {
-			return nil, err
-		}
-	} else {
-		logger.L().Debug("ContainerProfileProcessor.updateProfile - no new data, observed CP unchanged", loggerhelpers.String("key", key))
-	}
-
-	return processed, nil
-}
-
 // timeSeriesProcessResult holds the results of processing a time series
 type timeSeriesProcessResult struct {
 	processed             []string
 	hasNewData            bool
 	skipFurtherProcessing bool
+	commit                seriesCommit
 }
 
-// processTimeSeries processes a single time series and returns the result
+// processTimeSeries merges a single time series into the profile and returns
+// the row changes the commit phase has to apply for it.
 func (a *ContainerProfileProcessor) processTimeSeries(ctx context.Context,
 	timeSeries map[string][]softwarecomposition.TimeSeriesContainers, seriesID, key string,
 	profile *softwarecomposition.ContainerProfile, creationTimestamp *metav1.Time, expired bool) (timeSeriesProcessResult, error) {
@@ -676,10 +770,11 @@ func (a *ContainerProfileProcessor) processTimeSeries(ctx context.Context,
 		return result, err
 	}
 	result.skipFurtherProcessing = skipFurtherProcessing
-
-	// Write consolidated data back to database
-	if err := a.ContainerProfileStorage.ReplaceTimeSeriesContainerEntries(ctx, key, seriesID, deleteTimeSeries, newTimeSeries); err != nil {
-		return result, fmt.Errorf("failed to replace consolidated time series data: %w", err)
+	result.commit = seriesCommit{
+		seriesID:         seriesID,
+		deleteTimeSeries: deleteTimeSeries,
+		newTimeSeries:    newTimeSeries,
+		clearAll:         skipFurtherProcessing,
 	}
 
 	return result, nil
@@ -777,10 +872,7 @@ func (a *ContainerProfileProcessor) updateProfileStatus(ctx context.Context, key
 			logger.L().Debug("ContainerProfileProcessor.updateProfileStatus - expired profile is completed/full, skipping further processing",
 				loggerhelpers.String("key", key), loggerhelpers.String("seriesID", seriesID))
 
-			// Remove all time series data
-			if err := a.ContainerProfileStorage.DeleteTimeSeriesContainerEntries(ctx, key); err != nil {
-				return newTimeSeries, false, fmt.Errorf("failed to delete time series data: %w", err)
-			}
+			// Every row for the key is cleared by the commit phase (clearAll).
 			return newTimeSeries[:0], true, nil
 		}
 
@@ -806,10 +898,7 @@ func (a *ContainerProfileProcessor) updateProfileStatus(ctx context.Context, key
 			logger.L().Debug("ContainerProfileProcessor.updateProfileStatus - profile is completed/full, skipping further processing",
 				loggerhelpers.String("key", key), loggerhelpers.String("seriesID", seriesID))
 
-			// Remove all time series data
-			if err := a.ContainerProfileStorage.DeleteTimeSeriesContainerEntries(ctx, key); err != nil {
-				return newTimeSeries, false, fmt.Errorf("failed to delete time series data: %w", err)
-			}
+			// Every row for the key is cleared by the commit phase (clearAll).
 			return newTimeSeries[:0], true, nil
 		}
 		// Clear this time series as it is finished
