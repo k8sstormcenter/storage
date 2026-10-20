@@ -866,11 +866,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*softwarecomposition.NetworkPort)(nil), (*NetworkPort)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(a.(*softwarecomposition.NetworkPort), b.(*NetworkPort), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*OpenCalls)(nil), (*softwarecomposition.OpenCalls)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_OpenCalls_To_softwarecomposition_OpenCalls(a.(*OpenCalls), b.(*softwarecomposition.OpenCalls), scope)
 	}); err != nil {
@@ -1698,6 +1693,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*softwarecomposition.WorkloadScanRelatedObject)(nil), (*WorkloadScanRelatedObject)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_softwarecomposition_WorkloadScanRelatedObject_To_v1beta1_WorkloadScanRelatedObject(a.(*softwarecomposition.WorkloadScanRelatedObject), b.(*WorkloadScanRelatedObject), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*softwarecomposition.NetworkPort)(nil), (*NetworkPort)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_softwarecomposition_NetworkPort_To_v1beta1_NetworkPort(a.(*softwarecomposition.NetworkPort), b.(*NetworkPort), scope)
 	}); err != nil {
 		return err
 	}

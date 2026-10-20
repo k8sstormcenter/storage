@@ -934,8 +934,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ContainerProfileContainer(ref c
 					"execs": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "path",
-								"x-kubernetes-patch-strategy":  "merge",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -953,8 +952,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ContainerProfileContainer(ref c
 					"opens": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "path",
-								"x-kubernetes-patch-strategy":  "merge",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -1175,8 +1173,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ContainerProfileSpec(ref common
 					"execs": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "path",
-								"x-kubernetes-patch-strategy":  "merge",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -1194,8 +1191,7 @@ func schema_pkg_apis_softwarecomposition_v1beta1_ContainerProfileSpec(ref common
 					"opens": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "path",
-								"x-kubernetes-patch-strategy":  "merge",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
