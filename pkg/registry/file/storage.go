@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/afero"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -497,6 +498,25 @@ func (s *StorageImpl) saveObject(ctx context.Context, conn *sqlite.Conn, key str
 		val.Set(reflect.ValueOf(metadata).Elem())
 	}
 	return nil
+}
+
+// sameStoredContent reports whether saving incoming would change what is
+// stored. The incoming object carries what the apiserver adds on every
+// request and storage never persists: a fresh managedFields entry (saveObject
+// zeroes it before the write) and the request's TypeMeta. Empty and nil
+// collections are the same stored thing, because the gob payload cannot tell
+// them apart. Comparing the raw structs made every re-apply of an unchanged
+// object a write with a resourceVersion bump; a reconciler that re-applies on
+// a schedule then rewrote the same object forever.
+func sameStoredContent(stored, incoming runtime.Object) bool {
+	if m, ok := incoming.(metav1.Object); ok {
+		m.SetManagedFields(nil)
+	}
+	if m, ok := stored.(metav1.Object); ok {
+		m.SetManagedFields(nil)
+	}
+	stored.GetObjectKind().SetGroupVersionKind(incoming.GetObjectKind().GroupVersionKind())
+	return equality.Semantic.DeepEqual(stored, incoming)
 }
 
 // mapCancellation folds an error produced after the request context died into
@@ -1331,7 +1351,7 @@ func (s *StorageImpl) GuaranteedUpdateWithConn(
 		// check if the object is the same as the original
 		orig := origState.obj.DeepCopyObject() // FIXME this is expensive
 		_ = s.processor.PreSave(ctx, orig)
-		if reflect.DeepEqual(orig, ret) {
+		if sameStoredContent(orig, ret) {
 			logger.L().Debug("GuaranteedUpdate - tryUpdate returned the same object, no update needed", helpers.String("key", key))
 			// no change, return the original object
 			v.Set(reflect.ValueOf(origState.obj).Elem())
