@@ -169,6 +169,10 @@ func (a *ContainerProfileProcessor) PreSave(ctx context.Context, object runtime.
 
 	}
 
+	if isUserManaged(&profile.ObjectMeta) {
+		return nil
+	}
+
 	// Consolidated (non-TS) profile path: enforce completed-immutability.
 	// A direct patch of the consolidated ContainerProfile carries no
 	// ReportSeriesId, so it skips the TS branch above. If the stored
