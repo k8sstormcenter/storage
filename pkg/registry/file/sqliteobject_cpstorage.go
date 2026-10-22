@@ -298,7 +298,7 @@ func (c *objectStoreCPStorage) SaveContainerProfile(ctx context.Context, key str
 		}
 		return profile, nil, nil
 	}
-	cpCtx, cpCancel := context.WithTimeout(ctx, 5*time.Second)
+	cpCtx, cpCancel := context.WithTimeout(ctx, consolidatedSaveTimeout)
 	defer cpCancel()
 
 	h := readHandleFrom(ctx)

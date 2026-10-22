@@ -163,13 +163,8 @@ func (c *ContainerProfileStorageImpl) SaveContainerProfile(ctx context.Context, 
 		return profile, nil, nil
 	}
 
-	// The consolidated save decodes the current object and encodes the merged
-	// one before it takes the gate; for a large host profile that is far more
-	// than the 5 s an API request is bounded to, and a save that times out
-	// rolls the pass back, keeps every part, and fails again next pass: the
-	// profile never consolidates and its parts grow without bound (observed
-	// live on one node profile: 7 of 7 passes failed, 705 parts on another
-	// cluster). The bound here only has to stop a wedged save, not a slow one.
+	// Large consolidated profiles need a longer save budget than individual
+	// API requests, otherwise each pass can time out and retain every part.
 	cpCtx, cpCancel := context.WithTimeout(ctx, consolidatedSaveTimeout)
 	defer cpCancel()
 

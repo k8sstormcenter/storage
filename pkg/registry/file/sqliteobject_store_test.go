@@ -369,12 +369,10 @@ func TestObjectStore_CodecFidelity(t *testing.T) {
 	legacyView := &softwarecomposition.ContainerProfile{}
 	require.NoError(t, gob.NewDecoder(&buf).Decode(legacyView))
 	assert.True(t, legacyView.CreationTimestamp.Time.Equal(stamp.Time), "gob keeps the nanoseconds")
-	// Second codec delta, NOT in the design's list (reported): v1beta1 spec
-	// collections without omitempty come back as empty slices from JSON and
-	// as nil from gob (REST renders them as [] vs null).
-	assert.Nil(t, legacyView.Spec.Execs, "gob: empty Execs decodes to nil")
-	assert.NotNil(t, got.Spec.Execs, "json: empty Execs decodes to an empty slice")
-	assert.Empty(t, got.Spec.Execs)
+	// User-authored profiles bypass deflation, preserving their nil Execs.
+	// JSON encodes that as null and gob likewise restores nil.
+	assert.Nil(t, legacyView.Spec.Execs, "gob preserves nil authored Execs")
+	assert.Nil(t, got.Spec.Execs, "json preserves nil authored Execs")
 	assert.Equal(t, canonicalCP(legacyView), canonicalCP(got), "no field beyond creationTimestamp precision and nil-vs-empty collections may differ from the legacy GET")
 
 	// v1beta1 round trip of the body itself

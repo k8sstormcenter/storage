@@ -23,7 +23,7 @@ func NewREST(scheme *runtime.Scheme, storageImpl storage.Interface, optsGetter g
 		DefaultQualifiedResource:  softwarecomposition.Resource("rogueartifact"),
 		SingularQualifiedResource: softwarecomposition.Resource("rogueartifacts"),
 
-		Storage: genericregistry.DryRunnableStorage{Codec: nil, Storage: storageImpl},
+		Storage: genericregistry.DryRunnableStorage{Codec: registry.NewCodec(scheme), Storage: storageImpl},
 
 		CreateStrategy: strategy,
 		UpdateStrategy: strategy,
