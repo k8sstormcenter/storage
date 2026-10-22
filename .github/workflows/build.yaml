@@ -193,6 +193,7 @@ jobs:
             --tag "${IMAGE_NAME}:latest" \
             --build-arg image_version="${IMAGE_TAG}" \
             --build-arg client="${CLIENT}" \
+            --build-arg BUILD_REVISION="${{ needs.detect-changes.outputs.build_sha }}" \
             --provenance=false \
             --sbom=false \
             --push \
