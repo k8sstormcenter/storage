@@ -60,6 +60,9 @@ func (f *fakeStorage) GetContainerProfileMetadata(ctx context.Context, key strin
 func (f *fakeStorage) GetContainerProfileMetadataNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
 	return f.GetContainerProfileMetadata(ctx, key)
 }
+func (f *fakeStorage) GetContainerProfileNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
+	return f.GetContainerProfile(ctx, key)
+}
 func (f *fakeStorage) GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error) {
 	return softwarecomposition.SBOMSyft{}, nil
 }

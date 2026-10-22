@@ -93,6 +93,17 @@ func (c *ContainerProfileStorageImpl) GetContainerProfileMetadataNoLock(ctx cont
 	return profile, err
 }
 
+// GetContainerProfileNoLock reads the full consolidated profile without
+// acquiring the per-key lock. Consolidation planning runs under the key's
+// write lock, so the locking read would self-deadlock; the caller's lock
+// already excludes API writers of the same key.
+func (c *ContainerProfileStorageImpl) GetContainerProfileNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
+	conn := ctx.Value(connKey).(*sqlite.Conn)
+	profile := softwarecomposition.ContainerProfile{}
+	err := c.storageImpl.get(ctx, conn, key, storage.GetOptions{}, &profile, hasWriteLock)
+	return profile, err
+}
+
 func (c *ContainerProfileStorageImpl) GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error) {
 	conn := ctx.Value(connKey).(*sqlite.Conn)
 	sbom := softwarecomposition.SBOMSyft{}
@@ -107,9 +118,18 @@ func (c *ContainerProfileStorageImpl) GetStorageImpl() *StorageImpl {
 func (c *ContainerProfileStorageImpl) GetTsContainerProfile(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error) {
 	conn := ctx.Value(connKey).(*sqlite.Conn)
 	tsProfile := softwarecomposition.ContainerProfile{}
-	err := c.storageImpl.get(ctx, conn, key, storage.GetOptions{}, &tsProfile, noLock) // get instead of GetWithConn to bypass locking
+	// hasWriteLock = no lock management. Part reads run inside the gated
+	// consolidation transaction; taking even a transient read lock there would
+	// invert the (per-key lock → gate) ordering against an API writer of the
+	// part key. Lock-free is safe under the gate: payload renames only happen
+	// inside gated sections, so no rename can land while this read runs.
+	err := c.storageImpl.get(ctx, conn, key, storage.GetOptions{}, &tsProfile, hasWriteLock)
 	return tsProfile, err
 }
+
+// consolidatedSaveTimeout bounds one consolidated-profile save. It is a package
+// variable so tests can shorten it.
+var consolidatedSaveTimeout = 2 * time.Minute
 
 func (c *ContainerProfileStorageImpl) SaveContainerProfile(ctx context.Context, key string, profile *softwarecomposition.ContainerProfile) error {
 	conn := ctx.Value(connKey).(*sqlite.Conn)
@@ -118,7 +138,14 @@ func (c *ContainerProfileStorageImpl) SaveContainerProfile(ctx context.Context, 
 		return profile, nil, nil
 	}
 
-	cpCtx, cpCancel := context.WithTimeout(ctx, 5*time.Second)
+	// The consolidated save decodes the current object and encodes the merged
+	// one before it takes the gate; for a large host profile that is far more
+	// than the 5 s an API request is bounded to, and a save that times out
+	// rolls the pass back, keeps every part, and fails again next pass: the
+	// profile never consolidates and its parts grow without bound (observed
+	// live on one node profile: 7 of 7 passes failed, 705 parts on another
+	// cluster). The bound here only has to stop a wedged save, not a slow one.
+	cpCtx, cpCancel := context.WithTimeout(ctx, consolidatedSaveTimeout)
 	defer cpCancel()
 
 	// cachedExistingObject is deliberately nil. Passing a non-nil value (even an

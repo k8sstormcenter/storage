@@ -41,11 +41,19 @@ type NetworkNeighborApplyConfiguration struct {
 	// IPAddresses is the v0.0.2 list-form replacement for IPAddress.
 	// Each entry MAY be a literal IP, a CIDR (a.b.c.d/n), or the "*" sentinel.
 	// See pkg/registry/file/networkmatch for matcher semantics.
-	IPAddresses         []string                            `json:"ipAddresses,omitempty"`
-	ServiceRefNamespace *string                             `json:"serviceRefNamespace,omitempty"`
-	ServiceRefName      *string                             `json:"serviceRefName,omitempty"`
-	ServiceSelector     *v1.LabelSelectorApplyConfiguration `json:"serviceSelector,omitempty"`
-	Entity              *string                             `json:"entity,omitempty"`
+	IPAddresses []string `json:"ipAddresses,omitempty"`
+	// ServiceRefNamespace and ServiceRefName reference a single Service; the
+	// resolver expands it to that Service's ClusterIP(s) and backing endpoint
+	// IPs. Portable (a name, resolved per-cluster) and narrow, unlike a
+	// serviceCIDR ipAddresses entry. See k8sstormcenter/node-agent#92.
+	ServiceRefNamespace *string `json:"serviceRefNamespace,omitempty"`
+	ServiceRefName      *string `json:"serviceRefName,omitempty"`
+	// ServiceSelector selects Services by label, resolved like ServiceRef.
+	ServiceSelector *v1.LabelSelectorApplyConfiguration `json:"serviceSelector,omitempty"`
+	// Entity is a reserved peer identity not backed by a Service object.
+	// Supported value: "host" (node InternalIP + CNI gateway) — kubelet/health
+	// probes and node-sourced traffic.
+	Entity *string `json:"entity,omitempty"`
 }
 
 // NetworkNeighborApplyConfiguration constructs a declarative configuration of the NetworkNeighbor type for use with

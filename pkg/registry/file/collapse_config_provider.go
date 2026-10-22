@@ -24,8 +24,10 @@ import (
 // collapseSettingsTTL bounds how stale the cached CollapseConfiguration
 // settings may be before the provider re-reads storage. It is a
 // package-level var (not a const) so tests can shrink it to simulate TTL
-// expiry without a real 10s wait.
-var collapseSettingsTTL = 10 * time.Second
+// expiry without a real wait. Must exceed the consolidation maintenance
+// interval (30s): a shorter TTL expires EVERY cycle and the refresh Get then
+// runs inside the gate-held consolidation transaction.
+var collapseSettingsTTL = 2 * time.Minute
 
 // cachedCollapseSettings is the value stored behind the provider's
 // atomic.Pointer: the settings snapshot plus when it goes stale.

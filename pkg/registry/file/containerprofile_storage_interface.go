@@ -54,6 +54,8 @@ type ContainerProfileStorage interface {
 	// of its own.
 	GetContainerProfileMetadataNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error)
 
+	GetContainerProfileNoLock(ctx context.Context, key string) (softwarecomposition.ContainerProfile, error)
+
 	// GetSbom retrieves an SBOM by key.
 	// Returns storage.ErrCodeKeyNotFound if not found or not implemented.
 	GetSbom(ctx context.Context, key string) (softwarecomposition.SBOMSyft, error)

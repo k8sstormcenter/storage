@@ -248,8 +248,8 @@ func TestConsolidateTimeSeries_Dedup(t *testing.T) {
 	processor, pool, cleanup := newConsolidationTestProcessor(t, time.Hour)
 	defer cleanup()
 
-	old := time.Now().Add(-2 * time.Hour).String()      // < now-1h threshold => expired
-	recent := time.Now().Add(-1 * time.Minute).String() // > threshold => not expired
+	old := time.Now().UTC().Add(-2 * time.Hour).String()      // < now-1h threshold => expired
+	recent := time.Now().UTC().Add(-1 * time.Minute).String() // > threshold => not expired
 
 	// keyA: two rows, both expired AND hasData => appears twice in each list and in both lists.
 	keyA := seedTimeSeriesRow(t, pool, "ns-a", "name-a", "series-a", "1", old, true)
@@ -290,7 +290,7 @@ func TestConsolidateTimeSeries_ErrorIsolation(t *testing.T) {
 	processor, pool, cleanup := newConsolidationTestProcessor(t, time.Hour)
 	defer cleanup()
 
-	recent := time.Now().Add(-1 * time.Minute).String()
+	recent := time.Now().UTC().Add(-1 * time.Minute).String()
 	var keys []string
 	for _, n := range []string{"k0", "k1", "k2", "k3"} {
 		keys = append(keys, seedTimeSeriesRow(t, pool, "ns", n, "series", "1", recent, true))
@@ -572,10 +572,63 @@ func TestUpdateProfileStatusExpiredFull(t *testing.T) {
 
 	res, skip, err := processor.updateProfileStatus(context.TODO(), "test-key", "seriesID", profile, ts, true)
 	assert.NoError(t, err)
-	assert.True(t, skip)
+	assert.True(t, skip, "a finished series is cleared by the commit phase")
 	assert.Len(t, res, 0) // should be cleared
-	assert.True(t, mockStorage.deleteCalled)
-	assert.Equal(t, "test-key", mockStorage.deleteKey)
+	assert.False(t, mockStorage.deleteCalled, "the row clear is deferred to the gated commit")
 	assert.Equal(t, helpersv1.Completed, profile.Annotations[helpersv1.StatusMetadataKey])
 	assert.Equal(t, helpersv1.Full, profile.Annotations[helpersv1.CompletionMetadataKey])
+}
+
+// TestConsolidate_StatusTransitionPersistsWithoutNewData pins the
+// persist-on-transition contract: a maintenance pass that changes the
+// profile's lifecycle status while merging NO new part data (the expired /
+// late-finalization passes) must still save the consolidated profile.
+// Gating the save on new data alone dropped the in-memory transition after
+// the time-series rows were already cleared — the served profile then stayed
+// 'ready' forever with nothing left to consolidate.
+func TestConsolidate_StatusTransitionPersistsWithoutNewData(t *testing.T) {
+	pool := NewTestPool(t.TempDir())
+	require.NotNil(t, pool)
+	defer func() { _ = pool.Close() }()
+	sch := scheme.Scheme
+	require.NoError(t, softwarecomposition.AddToScheme(sch))
+	processor := ContainerProfileProcessor{
+		DeleteThreshold:         50 * time.Millisecond,
+		MaxContainerProfileSize: 40000,
+	}
+	s := &StorageImpl{
+		appFs:           afero.NewMemMapFs(),
+		pool:            pool,
+		locks:           utils.NewMapMutex[string](),
+		processor:       &processor,
+		root:            DefaultStorageRoot,
+		scheme:          sch,
+		versioner:       storage.APIObjectVersioner{},
+		watchDispatcher: NewWatchDispatcher(),
+	}
+	processor.SetStorage(NewContainerProfileStorageImpl(s, pool))
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancel()
+
+	content, err := os.ReadFile("testdata/p1.json")
+	require.NoError(t, err)
+	var part softwarecomposition.ContainerProfile
+	require.NoError(t, json.Unmarshal(content, &part))
+	require.NoError(t, s.Create(ctx, "/spdx.softwarecomposition.kubescape.io/containerprofile/"+part.Namespace+"/"+part.Name, &part, nil, 0))
+
+	// Pass 1: merges the part (new data), profile saved in learning state.
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+
+	// Let the series expire, then run a pass with NO new part data: the
+	// expired finalization transitions the status to Completed/Partial.
+	time.Sleep(80 * time.Millisecond)
+	require.NoError(t, processor.ConsolidateTimeSeries(ctx))
+
+	got := softwarecomposition.ContainerProfile{}
+	key := "/spdx.softwarecomposition.kubescape.io/containerprofile/kube-system/replicaset-coredns-5d78c9869d-coredns-185f-129c"
+	require.NoError(t, s.Get(ctx, key, storage.GetOptions{}, &got))
+	assert.Equal(t, "completed", got.Annotations["kubescape.io/status"],
+		"a no-new-data finalization pass must persist the status transition")
+	assert.Equal(t, "partial", got.Annotations["kubescape.io/completion"])
 }

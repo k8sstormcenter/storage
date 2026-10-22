@@ -116,6 +116,11 @@ func hasPrefixAtBoundary(pathPrefix, prefix string) bool {
 }
 
 func (ua *PathAnalyzer) AnalyzePath(p, identifier string) (string, error) {
+	// path.Clean("") returns "." — an empty input must stay empty, never mint
+	// a relative segment into a consolidated profile.
+	if p == "" {
+		return "", nil
+	}
 	p = path.Clean(p)
 	node, exists := ua.RootNodes[identifier]
 	if !exists {
@@ -166,6 +171,11 @@ func (ua *PathAnalyzer) processSegments(node *SegmentNode, p string) string {
 		// node's children to ⋯ when Count > threshold.
 		insertThreshold := ua.effectiveThreshold(p[:start])
 		collapseThreshold := ua.effectiveThreshold(p[:i])
+		// Collapsed on sight rather than on cardinality: see
+		// procIdentifierSegment and generatedCounterSegment.
+		if procIdentifierSegment(p[:start], segment) || generatedCounterSegment(segment) {
+			segment = procIdentifierKey
+		}
 		currentNode = ua.processSegment(currentNode, segment, insertThreshold)
 		ua.updateNodeStats(currentNode, collapseThreshold)
 		buf = append(buf, currentNode.SegmentName...)
@@ -229,6 +239,93 @@ func collapseAdjacentDynamic(buf []byte) []byte {
 	return buf[:out]
 }
 
+// procIdentifierKey is the trie key under which every pid and every tid at the
+// same level shares one subtree. It is deliberately NOT DynamicIdentifier: a ⋯
+// child makes the whole level dynamic (IsNextDynamic), which would route
+// /proc/self, /proc/cpuinfo and /proc/sys through it as well and cost the
+// profile the distinction between reading a named procfs file and walking a
+// task directory. The key can never collide with a real segment because
+// AnalyzePath splits on '/', so no segment can contain one.
+//
+// A node reached through this key still emits DynamicIdentifier — see
+// handleNewSegment — so the key is an internal routing detail and never
+// appears in a profile.
+const procIdentifierKey = "/pid"
+
+// procIdentifierSegment reports whether segment is a kernel-assigned number in
+// a procfs path. prefix is the path up to and including the '/' that precedes
+// segment.
+//
+// The rule is deliberately blunt: ANY all-digit segment anywhere under /proc is
+// an identifier. A pid, a tid, a file descriptor, an fdinfo entry, an irq
+// number — none of them carries meaning past the run that produced it, and a
+// profile that records one records a path that can never match again.
+//
+// An earlier version anchored this to /proc/<pid> and /proc/<pid>/task/<tid>
+// only. That is the case that hurts most, because the collapse threshold fires
+// on child COUNT and a container with a few threads never produces enough
+// distinct tids to reach it — but the anchoring bought nothing. There is no
+// all-digit segment under /proc whose exact value is worth keeping, so the
+// narrow rule was extra machinery guarding a distinction that does not exist.
+//
+// The rule stops at /proc for a reason that does not apply below it. Outside
+// /proc an integer in a path is routinely meaningful — a StatefulSet ordinal,
+// a container restart index in a log path, a rotation suffix — and collapsing
+// those would merge paths an operator means to tell apart. There the threshold
+// is the right instrument, because it acts on observed cardinality rather than
+// on a guess about what the number means.
+//
+// An already-collapsed identifier counts too: the node agent rewrites
+// /proc/<pid> at report time, and storage re-analyses its own emitted patterns
+// on every save, so both arrive here carrying the dynamic identifier and must
+// take the same route as a literal number.
+//
+// Names are untouched. /proc/self, /proc/thread-self, /proc/net, /proc/sys and
+// every other procfs name has no digits-only segment and stays literal.
+func procIdentifierSegment(prefix, segment string) bool {
+	const procRoot = "/proc/"
+	if len(prefix) < len(procRoot) || prefix[:len(procRoot)] != procRoot {
+		return false
+	}
+	return isNumericSegment(segment) || segment == DynamicIdentifier
+}
+
+// generatedCounterSegment reports whether segment is a zero-padded counter —
+// a machine-generated sequence number, never a name a person chose.
+//
+// These are volatile in the way a tid is: the value advances every time and
+// never comes back, so a profile that records one records a path that can
+// never match again. Unlike a tid the cardinality threshold does eventually
+// reach them, but not before learning ends, and learning ends first for
+// exactly the workloads that produce them slowly. Observed in production:
+// nginx proxy_temp writes /tmp/nginx/proxy_temp/<n>/<nn>/0000000001, one file
+// landed inside the learning window, and the completed profile froze that
+// single literal while the running container went on to write 0000000002 and
+// beyond — paths its own allowlist can never match.
+//
+// The padding is what makes this safe to apply outside /proc, where a bare
+// integer is routinely meaningful. A StatefulSet ordinal is 0, 1, 2; a
+// container restart index is 0; a log rotation suffix is 1 or 2. None of them
+// is written 0000000001. Requiring a leading zero AND at least four digits
+// takes the generated sequence numbers and leaves every meaningful integer
+// alone — "0" and "007" stay literal.
+func generatedCounterSegment(segment string) bool {
+	const minCounterDigits = 4
+	return len(segment) >= minCounterDigits && segment[0] == '0' && isNumericSegment(segment)
+}
+
+func isNumericSegment(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (ua *PathAnalyzer) processSegment(node *SegmentNode, segment string, threshold int) *SegmentNode {
 	if segment == DynamicIdentifier {
 		return ua.handleDynamicSegment(node)
@@ -263,8 +360,12 @@ func (ua *PathAnalyzer) processSegment(node *SegmentNode, segment string, thresh
 
 func (ua *PathAnalyzer) handleNewSegment(node *SegmentNode, segment string) *SegmentNode {
 	node.Count++
+	name := segment
+	if segment == procIdentifierKey {
+		name = DynamicIdentifier
+	}
 	newNode := &SegmentNode{
-		SegmentName: segment,
+		SegmentName: name,
 		Count:       0,
 		Children:    make(map[string]*SegmentNode),
 	}
@@ -382,7 +483,7 @@ func shallowChildrenCopy(src, dst *SegmentNode) {
 //     glob semantics. This avoids R0002 silently allowing access to a
 //     profiled directory's parent.
 //   - Unanchored `*` (no leading slash): explicit catch-all that also
-//     matches the root path `/`. The only way to whitelist `/` itself
+//     matches the root path `/`. The only way to allowlist `/` itself
 //     is an explicit unanchored `*`.
 //
 // Trailing-slash insensitivity: `/etc/` is treated as `/etc`, and

@@ -29,6 +29,7 @@ import (
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/generatednetworkpolicy"
 	knownserver "github.com/kubescape/storage/pkg/registry/softwarecomposition/knownservers"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/openvulnerabilityexchange"
+	"github.com/kubescape/storage/pkg/registry/softwarecomposition/rogueartifact"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/sbomsyftfiltereds"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/sbomsyfts"
 	"github.com/kubescape/storage/pkg/registry/softwarecomposition/seccompprofiles"
@@ -178,6 +179,7 @@ func (c completedConfig) New() (*WardleServer, error) {
 		"collapseconfigurations":              ep(collapseconfiguration.NewREST),
 		"configurationscansummaries":          ep(configurationscansummary.NewREST, configScanStorageImpl),
 		"containerprofiles":                   ep(containerprofile.NewREST, containerProfileStorageImpl),
+		"rogueartifacts":                      ep(rogueartifact.NewREST),
 		"generatednetworkpolicies":            ep(generatednetworkpolicy.NewREST, generatedNetworkPolicyStorage),
 		"knownservers":                        ep(knownserver.NewREST),
 		"openvulnerabilityexchangecontainers": ep(openvulnerabilityexchange.NewREST),

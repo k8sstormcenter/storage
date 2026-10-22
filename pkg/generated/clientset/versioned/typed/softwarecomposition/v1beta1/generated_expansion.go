@@ -30,6 +30,8 @@ type KnownServerExpansion interface{}
 
 type OpenVulnerabilityExchangeContainerExpansion interface{}
 
+type RogueArtifactExpansion interface{}
+
 type SBOMSyftExpansion interface{}
 
 type SBOMSyftFilteredExpansion interface{}

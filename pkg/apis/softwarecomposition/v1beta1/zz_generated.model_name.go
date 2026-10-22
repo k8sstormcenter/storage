@@ -482,6 +482,26 @@ func (in ReportMeta) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in RogueArtifact) OpenAPIModelName() string {
+	return "com.github.kubescape.storage.pkg.apis.softwarecomposition.v1beta1.RogueArtifact"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in RogueArtifactList) OpenAPIModelName() string {
+	return "com.github.kubescape.storage.pkg.apis.softwarecomposition.v1beta1.RogueArtifactList"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in RogueArtifactSpec) OpenAPIModelName() string {
+	return "com.github.kubescape.storage.pkg.apis.softwarecomposition.v1beta1.RogueArtifactSpec"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
+func (in RogueArtifactStatus) OpenAPIModelName() string {
+	return "com.github.kubescape.storage.pkg.apis.softwarecomposition.v1beta1.RogueArtifactStatus"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in RulePath) OpenAPIModelName() string {
 	return "com.github.kubescape.storage.pkg.apis.softwarecomposition.v1beta1.RulePath"
 }

@@ -158,6 +158,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &softwarecompositionv1beta1.ProductApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ReportMeta"):
 		return &softwarecompositionv1beta1.ReportMetaApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("RogueArtifact"):
+		return &softwarecompositionv1beta1.RogueArtifactApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("RogueArtifactSpec"):
+		return &softwarecompositionv1beta1.RogueArtifactSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("RogueArtifactStatus"):
+		return &softwarecompositionv1beta1.RogueArtifactStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("RulePath"):
 		return &softwarecompositionv1beta1.RulePathApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("RulePolicy"):

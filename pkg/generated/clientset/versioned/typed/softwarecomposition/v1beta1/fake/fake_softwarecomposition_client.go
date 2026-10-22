@@ -52,6 +52,10 @@ func (c *FakeSpdxV1beta1) OpenVulnerabilityExchangeContainers(namespace string) 
 	return newFakeOpenVulnerabilityExchangeContainers(c, namespace)
 }
 
+func (c *FakeSpdxV1beta1) RogueArtifacts(namespace string) v1beta1.RogueArtifactInterface {
+	return newFakeRogueArtifacts(c, namespace)
+}
+
 func (c *FakeSpdxV1beta1) SBOMSyfts(namespace string) v1beta1.SBOMSyftInterface {
 	return newFakeSBOMSyfts(c, namespace)
 }
