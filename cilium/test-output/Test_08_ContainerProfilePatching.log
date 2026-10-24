@@ -1,0 +1,8 @@
+﻿2026-10-24T12:45:19.7588277Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_08_ContainerProfilePatching$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_08_ContainerProfilePatching$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_08_ContainerProfilePatching
+    component_test.go:461: Creating namespace
+--- PASS: Test_08_ContainerProfilePatching (0.03s)
+PASS

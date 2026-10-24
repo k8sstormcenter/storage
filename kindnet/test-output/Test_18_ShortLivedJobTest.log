@@ -1,0 +1,12 @@
+﻿2026-10-24T12:25:12.2528331Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_18_ShortLivedJobTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_18_ShortLivedJobTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_18_ShortLivedJobTest
+[info] waiting for container profile. error: container profile not found; retry in: 10s; current time: 2026-10-24T12:25:12Z
+[info] waiting for container profile. error: container profile not found; retry in: 10s; current time: 2026-10-24T12:25:22Z
+[info] waiting for container profile. error: container profile not found; retry in: 10s; current time: 2026-10-24T12:25:32Z
+[info] waiting for container profile. error: container profile not found; retry in: 10s; current time: 2026-10-24T12:25:42Z
+[info] waiting for container profile. error: container profile not found; retry in: 10s; current time: 2026-10-24T12:25:52Z
+--- PASS: Test_18_ShortLivedJobTest (50.07s)
+PASS

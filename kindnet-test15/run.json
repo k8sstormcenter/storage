@@ -1,0 +1,20 @@
+{
+  "displayTitle": "conformance 1.41.0-duckling87 on kindnet",
+  "conclusion": "success",
+  "createdAt": "2026-10-24T12:53:02Z",
+  "updatedAt": "2026-10-24T13:03:35Z",
+  "jobs": [
+    {
+      "name": "resolve",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:58:26Z",
+      "completedAt": "2026-10-24T12:58:47Z"
+    },
+    {
+      "name": "conformance (Test_15_CompletedApBecomesReadyAgain)",
+      "conclusion": "failure",
+      "startedAt": "2026-10-24T12:58:50Z",
+      "completedAt": "2026-10-24T13:03:34Z"
+    }
+  ]
+}

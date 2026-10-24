@@ -1,0 +1,17 @@
+﻿2026-10-24T12:22:21.2414664Z ##[group]Run echo "Node agent logs"
+[36;1mecho "Node agent logs"[0m
+[36;1mkubectl logs $(kubectl get pods -n kubescape -o name | grep node-agent) -n kubescape -c node-agent | tail -n 2000[0m
+[36;1mecho "-----------------------------------------"[0m
+[36;1mecho "Storage logs"[0m
+[36;1mkubectl logs $(kubectl get pods -n kubescape -o name | grep storage) -n kubescape | tail -n 500[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+Node agent logs
+error: expected 'logs [-f] [-p] (POD | TYPE/NAME) [-c CONTAINER]'.
+POD or TYPE/NAME is a required argument for the logs command
+See 'kubectl logs -h' for help and examples
+-----------------------------------------
+Storage logs
+error: expected 'logs [-f] [-p] (POD | TYPE/NAME) [-c CONTAINER]'.
+POD or TYPE/NAME is a required argument for the logs command
+See 'kubectl logs -h' for help and examples

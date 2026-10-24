@@ -1,0 +1,20 @@
+﻿2026-10-24T12:32:50.6038219Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_07_RuleBindingApplyTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_07_RuleBindingApplyTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_07_RuleBindingApplyTest
+Command 'kubectl [apply --validate=false -f github.com/kubescape/node-agent/tests/resources/rulebindings/dup-fields-name-tag.yaml]' failed: The RuntimeRuleAlertBinding "all-pods-1" is invalid: 
+* <nil>: Invalid value: "": "spec.rules[0]" must validate one and only one schema (oneOf). Found none valid
+* <nil>: Invalid value: "": "spec.rules[0]" must not validate the schema (not)
+
+Command 'kubectl [apply --validate=false -f github.com/kubescape/node-agent/tests/resources/rulebindings/dup-fields-name-id.yaml]' failed: The RuntimeRuleAlertBinding "all-pods-1" is invalid: 
+* <nil>: Invalid value: "": "spec.rules[0]" must validate one and only one schema (oneOf). Found none valid
+* <nil>: Invalid value: "": "spec.rules[0]" must not validate the schema (not)
+* spec.rules[0].ruleTags: Required value
+
+Command 'kubectl [apply --validate=false -f github.com/kubescape/node-agent/tests/resources/rulebindings/dup-fields-id-tag.yaml]' failed: The RuntimeRuleAlertBinding "all-pods-1" is invalid: 
+* <nil>: Invalid value: "": "spec.rules[1]" must validate one and only one schema (oneOf). Found none valid
+* <nil>: Invalid value: "": "spec.rules[1]" must not validate the schema (not)
+
+--- PASS: Test_07_RuleBindingApplyTest (0.26s)
+PASS

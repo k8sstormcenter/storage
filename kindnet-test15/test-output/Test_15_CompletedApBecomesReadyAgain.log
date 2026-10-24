@@ -1,0 +1,21 @@
+﻿2026-10-24T13:03:31.7379382Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_15_CompletedApBecomesReadyAgain$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_15_CompletedApBecomesReadyAgain$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_15_CompletedApBecomesReadyAgain
+    component_test.go:802: 
+        	Error Trace:	github.com/kubescape/node-agent/tests/component_test.go:802
+        	Error:      	Not equal: 
+        	            	expected: "ready"
+        	            	actual  : "completed"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-ready
+        	            	+completed
+        	Test:       	Test_15_CompletedApBecomesReadyAgain
+--- FAIL: Test_15_CompletedApBecomesReadyAgain (0.03s)
+FAIL
+##[error]Process completed with exit code 1.

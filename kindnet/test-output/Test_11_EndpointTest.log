@@ -1,0 +1,20 @@
+﻿2026-10-24T12:25:22.8263086Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_11_EndpointTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_11_EndpointTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_11_EndpointTest
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:27Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:37Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:47Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:57Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:07Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:17Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:27Z
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+[info] waiting for stable container profile. error: profile content still changing (quiet window 1m0s); retry in: 15s
+--- PASS: Test_11_EndpointTest (173.84s)
+PASS

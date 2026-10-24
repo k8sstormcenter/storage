@@ -1,0 +1,25 @@
+﻿2026-10-24T12:34:54.7269440Z ##[group]Run echo "Node agent logs"
+[36;1mecho "Node agent logs"[0m
+[36;1mkubectl logs $(kubectl get pods -n kubescape -o name | grep node-agent) -n kubescape -c node-agent | tail -n 2000[0m
+[36;1mecho "-----------------------------------------"[0m
+[36;1mecho "Storage logs"[0m
+[36;1mkubectl logs $(kubectl get pods -n kubescape -o name | grep storage) -n kubescape | tail -n 500[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+Node agent logs
+error: only one of -c or an inline [CONTAINER] arg is allowed
+-----------------------------------------
+Storage logs
+{"level":"info","ts":"2026-10-24T12:28:47Z","msg":"containerprofile rollback advisory census: no fallback-eligible keys found"}
+{"level":"info","ts":"2026-10-24T12:28:47Z","msg":"starting cleanup task","interval":"6h0m0s"}
+{"level":"info","ts":"2026-10-24T12:28:47Z","msg":"starting storage server"}
+{"level":"info","ts":"2026-10-24T12:28:47Z","msg":"APIServer starting"}
+{"level":"warn","ts":"2026-10-24T12:28:47Z","msg":"skipping host cleanup: node discovery failed","error":"failed to list nodes: nodes is forbidden: User \"system:serviceaccount:kubescape:storage\" cannot list resource \"nodes\" in API group \"\" at the cluster scope"}
+{"level":"info","ts":"2026-10-24T12:28:47Z","msg":"finished cleanup task. sleeping..."}
+{"level":"warn","ts":"2026-10-24T12:28:47Z","msg":"skipping host cleanup: node discovery failed","error":"failed to list nodes: nodes is forbidden: User \"system:serviceaccount:kubescape:storage\" cannot list resource \"nodes\" in API group \"\" at the cluster scope"}
+{"level":"info","ts":"2026-10-24T12:28:51Z","msg":"QueueManager - queue configuration","kind":"containerprofiles","queueLength":50,"workerCount":2,"maxObjectSize":2500000}
+{"level":"info","ts":"2026-10-24T12:28:51Z","msg":"QueueManager - queue configuration","kind":"sbomsyfts","queueLength":50,"workerCount":1,"maxObjectSize":100000000}
+{"level":"info","ts":"2026-10-24T12:28:51Z","msg":"QueueManager - queue configuration","kind":"rogueartifacts","queueLength":100,"workerCount":2,"maxObjectSize":400000}
+{"level":"info","ts":"2026-10-24T12:28:58Z","msg":"QueueManager - queue configuration","kind":"configurationscansummaries","queueLength":100,"workerCount":2,"maxObjectSize":400000}
+{"level":"info","ts":"2026-10-24T12:28:58Z","msg":"QueueManager - queue configuration","kind":"generatednetworkpolicies","queueLength":100,"workerCount":2,"maxObjectSize":400000}
+{"level":"info","ts":"2026-10-24T12:28:58Z","msg":"QueueManager - queue configuration","kind":"vulnerabilitysummaries","queueLength":100,"workerCount":2,"maxObjectSize":400000}

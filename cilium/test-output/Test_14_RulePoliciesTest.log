@@ -1,0 +1,18 @@
+﻿2026-10-24T12:53:47.2794445Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_14_RulePoliciesTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_14_RulePoliciesTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_14_RulePoliciesTest
+[info] waiting for pod to be ready. pod: endpoint-traffic-deployment-6cbcd65b7b-lmr8d; error: pod endpoint-traffic-deployment-6cbcd65b7b-lmr8d is not ready; retry in: 5s
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:53:57Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:07Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:17Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:27Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:37Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:47Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:54:57Z
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+After completed....
+--- PASS: Test_14_RulePoliciesTest (180.59s)
+PASS

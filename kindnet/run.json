@@ -1,0 +1,308 @@
+{
+  "displayTitle": "conformance 1.41.0-duckling87 on kindnet",
+  "conclusion": "success",
+  "createdAt": "2026-10-24T12:20:36Z",
+  "updatedAt": "2026-10-24T12:46:54Z",
+  "jobs": [
+    {
+      "name": "resolve",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:39Z",
+      "completedAt": "2026-10-24T12:20:57Z"
+    },
+    {
+      "name": "conformance (Test_17_ApCompletedToPartialUpdateTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:50Z"
+    },
+    {
+      "name": "conformance (Test_01_BasicAlertTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:29:06Z"
+    },
+    {
+      "name": "conformance (Test_15_CompletedApCannotBecomeReadyAgain)",
+      "conclusion": "failure",
+      "startedAt": "2026-10-24T12:21:07Z",
+      "completedAt": "2026-10-24T12:22:22Z"
+    },
+    {
+      "name": "conformance (Test_22_AlertOnPartialNetworkProfileTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:41Z"
+    },
+    {
+      "name": "conformance (Test_27_ApplicationProfileOpens)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:32:20Z"
+    },
+    {
+      "name": "conformance (Test_11_EndpointTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:18Z"
+    },
+    {
+      "name": "conformance (Test_21_AlertOnPartialThenLearnNetworkTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:27:36Z"
+    },
+    {
+      "name": "conformance (Test_18_ShortLivedJobTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:26:03Z"
+    },
+    {
+      "name": "conformance (Test_20_AlertOnPartialThenLearnProcessTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:26:24Z"
+    },
+    {
+      "name": "conformance (Test_08_ContainerProfilePatching)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:25:41Z"
+    },
+    {
+      "name": "conformance (Test_23_RuleCooldownTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:42Z"
+    },
+    {
+      "name": "conformance (Test_16_ApNotStuckOnRestart)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:27:29Z"
+    },
+    {
+      "name": "conformance (Test_14_RulePoliciesTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:59Z"
+    },
+    {
+      "name": "conformance (Test_06_KillProcessInTheMiddle)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:27:16Z"
+    },
+    {
+      "name": "conformance (Test_13_NaturalLearningLifecycle)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:30:24Z"
+    },
+    {
+      "name": "conformance (Test_19_AlertOnPartialProfileTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:27:47Z"
+    },
+    {
+      "name": "conformance (Test_07_RuleBindingApplyTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:28:18Z",
+      "completedAt": "2026-10-24T12:32:52Z"
+    },
+    {
+      "name": "conformance (Test_25_RuleCooldownExactThreshold)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:29:01Z",
+      "completedAt": "2026-10-24T12:36:44Z"
+    },
+    {
+      "name": "conformance (Test_02_AllAlertsFromMaliciousApp)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:36:23Z",
+      "completedAt": "2026-10-24T12:45:11Z"
+    },
+    {
+      "name": "conformance (Test_12_AuthoredMultiSubtypeProfile)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:32:50Z",
+      "completedAt": "2026-10-24T12:40:16Z"
+    },
+    {
+      "name": "conformance (Test_39_SignedRulesUntrustedSignerRejected)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:28:44Z",
+      "completedAt": "2026-10-24T12:38:13Z"
+    },
+    {
+      "name": "conformance (Test_35_ExecTTYFieldTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:27:26Z"
+    },
+    {
+      "name": "conformance (Test_44_TrustAnchorModificationRequiresElevatedRBAC)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:26:05Z",
+      "completedAt": "2026-10-24T12:32:00Z"
+    },
+    {
+      "name": "conformance (Test_45_RuleSigningZeroAdmittedDetectionOutage)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:32:49Z"
+    },
+    {
+      "name": "conformance (Test_51_ServiceRefIngressR0012)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:28:17Z"
+    },
+    {
+      "name": "conformance (Test_50_ServiceRefNetworkNeighbor)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:25:43Z",
+      "completedAt": "2026-10-24T12:35:44Z"
+    },
+    {
+      "name": "conformance (Test_43_RelativeOpenPathResolution)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:27:37Z",
+      "completedAt": "2026-10-24T12:34:09Z"
+    },
+    {
+      "name": "conformance (Test_24_ProcessTreeDepthTest)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:34:58Z",
+      "completedAt": "2026-10-24T12:43:48Z"
+    },
+    {
+      "name": "conformance (Test_33_AnalyzeOpensWildcardAnchoring)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:28:52Z",
+      "completedAt": "2026-10-24T12:38:28Z"
+    },
+    {
+      "name": "conformance (Test_47_StoredSpecDivergenceInert)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:29:35Z",
+      "completedAt": "2026-10-24T12:35:33Z"
+    },
+    {
+      "name": "conformance (Test_58_ShadowProfileSurvivesAgentRestart)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:27:31Z",
+      "completedAt": "2026-10-24T12:41:37Z"
+    },
+    {
+      "name": "conformance (Test_29_SignedContainerProfile)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:30:25Z",
+      "completedAt": "2026-10-24T12:36:34Z"
+    },
+    {
+      "name": "conformance (Test_40_TrustPolicyFailClosed)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:27:18Z",
+      "completedAt": "2026-10-24T12:38:17Z"
+    },
+    {
+      "name": "conformance (Test_38_SignedRulesBundleOverlay)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:35:45Z",
+      "completedAt": "2026-10-24T12:46:53Z"
+    },
+    {
+      "name": "conformance (Test_42_SignatureStrippedFragmentRejected)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:28:20Z",
+      "completedAt": "2026-10-24T12:36:22Z"
+    },
+    {
+      "name": "conformance (Test_49_EphemeralContainerFullTreatment)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:22:24Z",
+      "completedAt": "2026-10-24T12:29:33Z"
+    },
+    {
+      "name": "conformance (Test_46_TrustPolicyReloadLifecycle)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:20:59Z",
+      "completedAt": "2026-10-24T12:33:39Z"
+    },
+    {
+      "name": "conformance (Test_37_SignedBundleOverlay)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:32:02Z",
+      "completedAt": "2026-10-24T12:38:18Z"
+    },
+    {
+      "name": "conformance (Test_30_IgnoreExcludeAndLearningDuration)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:29:08Z",
+      "completedAt": "2026-10-24T12:42:53Z"
+    },
+    {
+      "name": "conformance (Test_57_ProbeScopedHostIngress)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:26:26Z",
+      "completedAt": "2026-10-24T12:34:56Z"
+    },
+    {
+      "name": "conformance (Test_31_TamperDetectionAlert)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:27:49Z",
+      "completedAt": "2026-10-24T12:33:34Z"
+    },
+    {
+      "name": "conformance (Test_28_UserDefinedNetworkNeighborhood)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:28:42Z",
+      "completedAt": "2026-10-24T12:43:05Z"
+    },
+    {
+      "name": "conformance (Test_36_MultiContainerPerContainerBinding)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:32:21Z",
+      "completedAt": "2026-10-24T12:37:53Z"
+    },
+    {
+      "name": "conformance (Test_41_SignedBundleNamespaceFreedom)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:35:35Z",
+      "completedAt": "2026-10-24T12:41:26Z"
+    },
+    {
+      "name": "conformance (Test_34_NetworkNeighborsCIDRCollapse)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:33:36Z",
+      "completedAt": "2026-10-24T12:41:57Z"
+    },
+    {
+      "name": "conformance (Test_53_DefaultLearnedNetworkFalsePositives)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:27:28Z",
+      "completedAt": "2026-10-24T12:38:17Z"
+    },
+    {
+      "name": "conformance (Test_32_UnexpectedProcessArguments)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:32:54Z",
+      "completedAt": "2026-10-24T12:46:51Z"
+    },
+    {
+      "name": "conformance (Test_56_StackedFragmentReplacement)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:33:41Z",
+      "completedAt": "2026-10-24T12:46:41Z"
+    },
+    {
+      "name": "conformance (Test_48_MultiSubtypeGroupedProfileDocument)",
+      "conclusion": "success",
+      "startedAt": "2026-10-24T12:34:11Z",
+      "completedAt": "2026-10-24T12:43:19Z"
+    }
+  ]
+}

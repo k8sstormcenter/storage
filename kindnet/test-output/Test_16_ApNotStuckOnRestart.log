@@ -1,0 +1,9 @@
+﻿2026-10-24T12:25:57.3165380Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_16_ApNotStuckOnRestart$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_16_ApNotStuckOnRestart$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_16_ApNotStuckOnRestart
+    component_test.go:893: merged ContainerProfile "replicaset-nginx-deployment-77bc6bd484-nginx-6504-7b74" reached ready 45s after restart-ready
+    component_test.go:898: probing with 'ls -l' — 0s after profile completion
+--- PASS: Test_16_ApNotStuckOnRestart (90.27s)
+PASS

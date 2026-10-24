@@ -1,0 +1,21 @@
+﻿2026-10-24T12:25:22.2929438Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_14_RulePoliciesTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_14_RulePoliciesTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_14_RulePoliciesTest
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:27Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:37Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:47Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:25:57Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:07Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:17Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:27Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:26:37Z
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+[info] waiting for rule policy. error: ln not yet in R1010 allowed processes; retry in: 10s
+After completed....
+--- PASS: Test_14_RulePoliciesTest (215.50s)
+PASS

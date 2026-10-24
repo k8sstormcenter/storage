@@ -1,0 +1,27 @@
+﻿2026-10-24T12:51:57.6929443Z ##[group]Run cd /tmp/ct && ./component.test -test.v -test.run '^Test_17_ApCompletedToPartialUpdateTest$' -test.timeout 10m
+[36;1mcd /tmp/ct && ./component.test -test.v -test.run '^Test_17_ApCompletedToPartialUpdateTest$' -test.timeout 10m[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+=== RUN   Test_17_ApCompletedToPartialUpdateTest
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:52:32Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:52:42Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:52:52Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:53:02Z
+[info] waiting for container profile. error: no container profiles found; retry in: 10s; current time: 2026-10-24T12:53:12Z
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent rollout not observed yet: observedGeneration 2 < 3; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+[info] waiting for daemonset to be ready. daemonset: node-agent; namespace: kubescape; error: daemonset kubescape/node-agent not ready: 0/1 pods ready; retry in: 5s
+--- PASS: Test_17_ApCompletedToPartialUpdateTest (220.20s)
+PASS
